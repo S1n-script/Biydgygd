@@ -348,7 +348,7 @@ Tab:AddDropdown({
 })
 
 print("Refined Auto Steal loaded – toggle on, walk near friends, and it should trigger reliably.")
-Tab:AddLabel("                                                       MISC       ")
+Tab:AddLabel("                                                  MISC         ")
 -- NoClip Toggle
 local NoClip = false
 local function toggleNoClip(state)
