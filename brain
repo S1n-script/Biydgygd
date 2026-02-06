@@ -152,10 +152,9 @@ local FriendsFolder = workspace:WaitForChild("Live"):WaitForChild("Friends")
 local player = game.Players.LocalPlayer
 
 -- Config
-local HOLD_TIME = 0.75
-local HOLD_BUFFER = 0.18          -- total hold ~0.93s → safe
-local CHECK_INTERVAL = 0.2        -- how often to scan (fast but not laggy)
-local DISTANCE_EXTRA = 2          -- give a little buffer beyond MaxActivationDistance
+local HOLD_BUFFER = 0.25          -- extra safety buffer after hold
+local CHECK_INTERVAL = 0.18       -- slightly faster scan
+local DISTANCE_EXTRA = 3          -- generous buffer for activation
 
 getgenv().AutoStealOn = false
 
@@ -171,9 +170,9 @@ local function GetAllPrompts()
                     Prompt = prompt,
                     RootPart = root,
                     FriendName = friend.Name,
-                    MaxDist = prompt.MaxActivationDistance or 10
+                    MaxDist = prompt.MaxActivationDistance or 12
                 })
-                print("Loaded prompt: " .. friend.Name .. " (max dist: " .. (prompt.MaxActivationDistance or "unknown") .. ")")
+                print("Loaded prompt: " .. friend.Name .. " (max dist: " .. prompt.MaxActivationDistance .. ")")
             end
         end
     end
@@ -183,8 +182,8 @@ end
 
 local allPrompts = GetAllPrompts()
 
--- Try to steal if close enough
-local function AttemptSteal(entry)
+-- Improved steal attempt (supports forced triggering)
+local function AttemptSteal(entry, force)
     local character = player.Character
     if not character then return false end
     
@@ -196,30 +195,41 @@ local function AttemptSteal(entry)
         return false
     end
     
-    local dist = (hrp.Position - entry.RootPart.Position).Magnitude
-    local maxAllowed = entry.MaxDist + DISTANCE_EXTRA
-    
-    if dist > maxAllowed then
-        -- Optional: uncomment to spam console when close
-        -- print("Too far from " .. entry.FriendName .. " (" .. math.floor(dist) .. " studs)")
-        return false
+    -- Distance check unless forcing (e.g. after teleport)
+    if not force then
+        local dist = (hrp.Position - entry.RootPart.Position).Magnitude
+        local maxAllowed = entry.MaxDist + DISTANCE_EXTRA
+        
+        if dist > maxAllowed then
+            return false
+        end
     end
     
-    print("CLOSE ENOUGH → Stealing " .. entry.FriendName .. " (dist: " .. math.floor(dist) .. ")")
+    print("Stealing → " .. entry.FriendName .. " (force: " .. tostring(force) .. ")")
     
-    -- Hold simulation (most reliable for hold prompts)
-    prompt:InputHoldBegin()
-    task.wait(HOLD_TIME + HOLD_BUFFER)
-    prompt:InputHoldEnd()
+    -- Use actual HoldDuration from the prompt (most reliable fix)
+    local holdDuration = prompt.HoldDuration or 0
     
-    -- Extra instant trigger (covers games that prefer this)
-    task.wait(0.05)
-    fireproximityprompt(prompt)
+    if holdDuration > 0 then
+        prompt:InputHoldBegin()
+        task.wait(holdDuration + HOLD_BUFFER)
+        prompt:InputHoldEnd()
+    end
+    
+    -- Multiple trigger styles (covers most anti-cheat bypasses / executor differences)
+    task.wait(0.06)
+    fireproximityprompt(prompt)                 -- Standard
+    task.wait(0.06)
+    fireproximityprompt(prompt, 0)              -- Skip hold
+    task.wait(0.06)
+    fireproximityprompt(prompt, 1)              -- Respect hold
+    task.wait(0.08)
+    fireproximityprompt(prompt, 0, true)        -- Some games need this variant
     
     return true
 end
 
--- Main loop
+-- Main auto-steal loop
 spawn(function()
     while true do
         task.wait(CHECK_INTERVAL)
@@ -230,24 +240,24 @@ spawn(function()
         
         local stolen = 0
         for _, entry in ipairs(allPrompts) do
-            if AttemptSteal(entry) then
+            if AttemptSteal(entry, false) then
                 stolen = stolen + 1
             end
         end
         
         if stolen > 0 then
-            print("Stole from " .. stolen .. " blocks this cycle")
+            print("Stole from " .. stolen .. " friends this cycle")
         end
     end
 end)
 
--- UI Toggle (add to your Tab / library)
+-- UI Controls
 Tab:AddToggle({
     Name = "Auto Steal (Walk Close Only)",
     Default = false,
     Callback = function(enabled)
         getgenv().AutoStealOn = enabled
-        print("Auto Steal " .. (enabled and "ENABLED – walk near blocks!" or "DISABLED"))
+        print("Auto Steal " .. (enabled and "ENABLED – get close to friends!" or "DISABLED"))
     end
 })
 
@@ -255,58 +265,11 @@ Tab:AddButton({
     Name = "Refresh Prompt List",
     Callback = function()
         allPrompts = GetAllPrompts()
+        print("Prompt list refreshed!")
     end
 })
 
-print("Walk-to-steal script loaded – toggle on, get close (within ~10 studs), and it should grab them!")
-
-local friendsFolder = workspace.Live.Friends
-local player = game.Players.LocalPlayer
-
--- Dynamically get valid friend names (only BaseParts or Models with PrimaryPart)
-local options = {}
-for _, obj in pairs(friendsFolder:GetChildren()) do
-    if obj:IsA("BasePart") or (obj:IsA("Model") and obj.PrimaryPart) then
-        table.insert(options, obj.Name)
-    end
-end
-table.sort(options)  -- Alphabetize for easy finding
-
--- Create the dropdown
-Tab:AddDropdown({
-    Name = "Teleport to Friend",
-    Default = options[1] or "No Friends",
-    Options = options,
-    Callback = function(Value)
-        local targetObj = friendsFolder:FindFirstChild(Value)
-        if targetObj then
-            local targetCFrame
-            if targetObj:IsA("BasePart") then
-                targetCFrame = targetObj.CFrame
-            elseif targetObj:IsA("Model") and targetObj.PrimaryPart then
-                targetCFrame = targetObj.PrimaryPart.CFrame
-            end
-            
-            if targetCFrame then
-                -- Safely get character (handles respawn/death)
-                local character = player.Character
-                if not character then
-                    character = player.CharacterAdded:Wait()
-                end
-                local root = character:WaitForChild("HumanoidRootPart")
-                
-                root.CFrame = targetCFrame
-                print("🧍 Teleported to: " .. Value)
-            else
-                print("❌ No valid CFrame for: " .. Value)
-            end
-        else
-            print("❌ Friend not found: " .. Value)
-        end
-    end
-})
-
-print("Dropdown added! Found " .. #options .. " teleportable friends")
+print("Refined Auto Steal loaded – toggle on, walk near friends, and it should trigger reliably.")
 
 -- NoClip Toggle
 local NoClip = false
@@ -356,5 +319,3 @@ Tab:AddToggle({
         print("NoClip " .. (Value and "ENABLED" or "DISABLED"))
     end
 })
-
---loadstring(game:HttpGet("https://raw.githubusercontent.com/S1n-script/Biydgygd/refs/heads/main/brain"))()
