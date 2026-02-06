@@ -269,6 +269,70 @@ Tab:AddButton({
     end
 })
 
+-- Dynamically get valid friend names
+local options = {"Select Friend"}  -- Prevents auto-TP
+for _, obj in pairs(FriendsFolder:GetChildren()) do
+    if obj:IsA("BasePart") or (obj:IsA("Model") and obj.PrimaryPart) then
+        table.insert(options, obj.Name)
+    end
+end
+table.sort(options)
+
+Tab:AddDropdown({
+    Name = "Teleport & Steal Friend (Then Return)",
+    Default = "Select Friend",
+    Options = options,
+    Callback = function(Value)
+        if Value == "Select Friend" then
+            print("No action – select a real friend!")
+            return
+        end
+        
+        local targetObj = FriendsFolder:FindFirstChild(Value)
+        if not targetObj then
+            print("Friend not found: " .. Value)
+            return
+        end
+        
+        local targetCFrame
+        if targetObj:IsA("BasePart") then
+            targetCFrame = targetObj.CFrame
+        elseif targetObj:IsA("Model") and targetObj.PrimaryPart then
+            targetCFrame = targetObj.PrimaryPart.CFrame
+        end
+        
+        if not targetCFrame then return end
+        
+        local character = player.Character or player.CharacterAdded:Wait()
+        local root = character:WaitForChild("HumanoidRootPart")
+        
+        local originalCFrame = root.CFrame  -- Save position
+        
+        root.CFrame = targetCFrame * CFrame.new(0, 0, -2)  -- Slight offset for prompt
+        
+        task.wait(0.15)  -- Let TP settle
+        
+        -- Attempt steal with force
+        local targetEntry
+        for _, entry in ipairs(allPrompts) do
+            if entry.FriendName == Value then
+                targetEntry = entry
+                break
+            end
+        end
+        
+        if targetEntry then
+            AttemptSteal(targetEntry, true)
+            task.wait(0.8)  -- Give time for steal animation/server
+        else
+            print("No StealPrompt found for: " .. Value)
+        end
+        
+        root.CFrame = originalCFrame  -- Return
+        print("Returned after stealing " .. Value)
+    end
+})
+
 print("Refined Auto Steal loaded – toggle on, walk near friends, and it should trigger reliably.")
 
 -- NoClip Toggle
