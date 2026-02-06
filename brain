@@ -40,7 +40,7 @@ Tab:AddToggle({
                     
                     for _, id in ipairs(collectIDs) do
                         collectRemote:FireServer(id)
-                        task.wait(0.4)
+                        task.wait(0.2)
                     end
                     
                     task.wait(2)
@@ -82,7 +82,7 @@ Tab:AddToggle({
                     
                     for _, id in ipairs(friendIDs) do
                         upgradeRemote:FireServer(id)
-                        task.wait(0.5)
+                        task.wait(0.3)
                     end
                     
                     task.wait(2)  -- Pause after full cycle to avoid spam/kicks
