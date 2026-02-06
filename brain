@@ -307,3 +307,52 @@ Tab:AddDropdown({
 })
 
 print("Dropdown added! Found " .. #options .. " teleportable friends")
+
+-- NoClip Toggle
+local NoClip = false
+local function toggleNoClip(state)
+    NoClip = state
+    
+    if not NoClip then
+        -- Turn off: restore collision
+        local char = game.Players.LocalPlayer.Character
+        if char then
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") or part:IsA("MeshPart") then
+                    part.CanCollide = true
+                end
+            end
+        end
+        return
+    end
+    
+    -- NoClip ON → main loop
+    task.spawn(function()
+        while NoClip do
+            local char = game.Players.LocalPlayer.Character
+            if not char then
+                task.wait(0.4)
+                continue
+            end
+            
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") or part:IsA("MeshPart") then
+                    if part.CanCollide ~= false then
+                        part.CanCollide = false
+                    end
+                end
+            end
+            
+            task.wait(0.25) -- refresh rate (lower = smoother but more cpu)
+        end
+    end)
+end
+
+Tab:AddToggle({
+    Name = "NoClip (Walk Through Walls)",
+    Default = false,
+    Callback = function(Value)
+        toggleNoClip(Value)
+        print("NoClip " .. (Value and "ENABLED" or "DISABLED"))
+    end
+})
