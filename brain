@@ -1,0 +1,139 @@
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/jensonhirst/Orion/main/source')))()
+
+local Window = OrionLib:MakeWindow({Name = "Testing", HidePremium = false, SaveConfig = true, ConfigFolder = "OrionTest"})
+
+local Tab = Window:MakeTab({
+    Name = "Auto",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
+
+local Collect = false
+
+Tab:AddToggle({
+    Name = "AutoCollect",
+    Default = false,
+    Callback = function(Value)
+        Collect = Value
+        
+        if Collect then
+            task.spawn(function()
+                while Collect do
+                    local collectIDs = {
+                        "1", "2", "3", "4", "5",
+                        "6", "7", "8", "9", "10"
+                    }
+                    
+                    local remotesFolder = game:GetService("ReplicatedStorage")
+                        :WaitForChild("SharedModules")
+                        :WaitForChild("Network")
+                        :WaitForChild("Remotes")
+                    
+                    local collectRemote = remotesFolder:WaitForChild("Collect Earnings")
+                    
+                    for _, id in ipairs(collectIDs) do
+                        collectRemote:FireServer(id)
+                        task.wait(0.4)
+                    end
+                    
+                    task.wait(5)
+                end
+            end)
+        end
+    end
+})
+
+local UpgFriend = false
+
+Tab:AddToggle({
+    Name = "Auto Friend Upgrade",
+    Default = false,
+    Callback = function(Value)
+        UpgFriend = Value
+        
+        if UpgFriend then
+            task.spawn(function()
+                while UpgFriend do
+                    local friendIDs = {
+                        "1", "2", "3", "4", "5",
+                        "6", "7", "8", "9", "10"
+                    }
+                    
+                    local remotesFolder = game:GetService("ReplicatedStorage")
+                        :WaitForChild("SharedModules")
+                        :WaitForChild("Network")
+                        :WaitForChild("Remotes")
+                    
+                    local upgradeRemote = remotesFolder:WaitForChild("Upgrade Friend")
+                    
+                    for _, id in ipairs(friendIDs) do
+                        upgradeRemote:FireServer(id)
+                        task.wait(0.5)
+                    end
+                    
+                    task.wait(6)  -- Pause after full cycle to avoid spam/kicks
+                end
+            end)
+        end
+    end
+})
+
+local UpgSpeed = false
+
+Tab:AddToggle({
+    Name = "Auto Speed Upgrade",
+    Default = false,
+    Callback = function(Value)
+        UpgSpeed = Value -- Update based on toggle state
+
+        if UpgSpeed then
+            task.spawn(function()
+                while UpgSpeed do
+                    local args = {
+                        4
+                    }
+                    game:GetService("ReplicatedStorage"):WaitForChild("SharedModules"):WaitForChild("Network"):WaitForChild("Remotes"):WaitForChild("Buy Speed Upgrade"):FireServer(unpack(args))
+                    task.wait(0.5) -- Short delay to avoid overwhelming the server
+                end
+            end)
+        end
+    end
+})
+
+local Carry = false
+
+Tab:AddToggle({
+    Name = "Auto Carry Upgrade",
+    Default = false,
+    Callback = function(Value)
+        Carry = Value -- Update based on toggle state
+
+        if Carry then
+            task.spawn(function()
+                while Carry do
+                    game:GetService("ReplicatedStorage"):WaitForChild("SharedModules"):WaitForChild("Network"):WaitForChild("Remotes"):WaitForChild("Upgrade Carry Limit"):FireServer()
+                    task.wait(0.5) -- Short delay to avoid overwhelming the server
+                end
+            end)
+        end
+    end
+})
+
+local Rebirth = false
+
+Tab:AddToggle({
+    Name = "Auto Rebirth",
+    Default = false,
+    Callback = function(Value)
+        Rebirth = Value -- Update based on toggle state
+
+        if Rebirth then
+            task.spawn(function()
+                while Rebirth do
+                    game:GetService("ReplicatedStorage"):WaitForChild("SharedModules"):WaitForChild("Network"):WaitForChild("Remotes"):WaitForChild("Rebirth"):FireServer()
+                    task.wait(0.5) -- Short delay to avoid overwhelming the server
+                end
+            end)
+        end
+    end
+})
