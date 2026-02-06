@@ -84,16 +84,26 @@ Tab:AddToggle({
     Name = "Auto Speed Upgrade",
     Default = false,
     Callback = function(Value)
-        UpgSpeed = Value -- Update based on toggle state
-
+        UpgSpeed = Value
+        
         if UpgSpeed then
             task.spawn(function()
                 while UpgSpeed do
-                    local args = {
-                        1
-                    }
-                    game:GetService("ReplicatedStorage"):WaitForChild("SharedModules"):WaitForChild("Network"):WaitForChild("Remotes"):WaitForChild("Buy Speed Upgrade"):FireServer(unpack(args))
-                    task.wait(0.5) -- Short delay to avoid overwhelming the server
+                    local speedLevels = {1, 2, 3, 4}  -- 1 to 4 as numbers (no quotes)
+                    
+                    local remotesFolder = game:GetService("ReplicatedStorage")
+                        :WaitForChild("SharedModules")
+                        :WaitForChild("Network")
+                        :WaitForChild("Remotes")
+                    
+                    local upgradeRemote = remotesFolder:WaitForChild("Buy Speed Upgrade")
+                    
+                    for _, level in ipairs(speedLevels) do
+                        upgradeRemote:FireServer(level)
+                        task.wait(0.5)
+                    end
+                    
+                    task.wait(6)  -- Pause after trying all 4 before next cycle
                 end
             end)
         end
