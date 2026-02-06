@@ -7,7 +7,7 @@ local Tab = Window:MakeTab({
     Icon = "rbxassetid://4483345998",
     PremiumOnly = false
 })
-
+Tab:AddLabel("                                          AUTO FEATURES         ")
 local Collect = false
 
 Tab:AddToggle({
@@ -161,7 +161,7 @@ Tab:AddToggle({
         end
     end
 })
-
+Tab:AddLabel("                                          STEAL FEATURES         ")
 local FriendsFolder = workspace:WaitForChild("Live"):WaitForChild("Friends")
 local player = game.Players.LocalPlayer
 
@@ -348,7 +348,7 @@ Tab:AddDropdown({
 })
 
 print("Refined Auto Steal loaded – toggle on, walk near friends, and it should trigger reliably.")
-
+Tab:AddLabel("                                          MISC         ")
 -- NoClip Toggle
 local NoClip = false
 local function toggleNoClip(state)
