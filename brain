@@ -11,7 +11,7 @@ Tab:AddLabel("                                          AUTO FEATURES         ")
 local Collect = false
 
 Tab:AddToggle({
-    Name = "AutoCollect",
+    Name = "AutoCollect (Near Base)",
     Default = false,
     Callback = function(Value)
         Collect = Value
@@ -53,7 +53,7 @@ Tab:AddToggle({
 local UpgFriend = false
 
 Tab:AddToggle({
-    Name = "Auto Friend Upgrade",
+    Name = "Auto Friend Upgrade (NB)",
     Default = false,
     Callback = function(Value)
         UpgFriend = Value
@@ -293,7 +293,7 @@ end
 table.sort(options)
 
 Tab:AddDropdown({
-    Name = "Teleport & Steal Friend (Then Return)",
+    Name = "Steal Friend",
     Default = "Select Friend",
     Options = options,
     Callback = function(Value)
