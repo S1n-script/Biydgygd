@@ -137,3 +137,163 @@ Tab:AddToggle({
         end
     end
 })
+
+local FriendsFolder = workspace:WaitForChild("Live"):WaitForChild("Friends")
+local player = game.Players.LocalPlayer
+
+-- Config
+local HOLD_TIME = 0.75
+local HOLD_BUFFER = 0.18          -- total hold ~0.93s → safe
+local CHECK_INTERVAL = 0.2        -- how often to scan (fast but not laggy)
+local DISTANCE_EXTRA = 2          -- give a little buffer beyond MaxActivationDistance
+
+getgenv().AutoStealOn = false
+
+-- Find all valid StealPrompts
+local function GetAllPrompts()
+    local prompts = {}
+    for _, friend in pairs(FriendsFolder:GetChildren()) do
+        local root = friend:FindFirstChild("RootPart")
+        if root then
+            local prompt = root:FindFirstChild("StealPrompt")
+            if prompt and prompt:IsA("ProximityPrompt") then
+                table.insert(prompts, {
+                    Prompt = prompt,
+                    RootPart = root,
+                    FriendName = friend.Name,
+                    MaxDist = prompt.MaxActivationDistance or 10
+                })
+                print("Loaded prompt: " .. friend.Name .. " (max dist: " .. (prompt.MaxActivationDistance or "unknown") .. ")")
+            end
+        end
+    end
+    print("Found " .. #prompts .. " StealPrompts")
+    return prompts
+end
+
+local allPrompts = GetAllPrompts()
+
+-- Try to steal if close enough
+local function AttemptSteal(entry)
+    local character = player.Character
+    if not character then return false end
+    
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+    
+    local prompt = entry.Prompt
+    if not prompt or not prompt:IsDescendantOf(workspace) or not prompt.Enabled then
+        return false
+    end
+    
+    local dist = (hrp.Position - entry.RootPart.Position).Magnitude
+    local maxAllowed = entry.MaxDist + DISTANCE_EXTRA
+    
+    if dist > maxAllowed then
+        -- Optional: uncomment to spam console when close
+        -- print("Too far from " .. entry.FriendName .. " (" .. math.floor(dist) .. " studs)")
+        return false
+    end
+    
+    print("CLOSE ENOUGH → Stealing " .. entry.FriendName .. " (dist: " .. math.floor(dist) .. ")")
+    
+    -- Hold simulation (most reliable for hold prompts)
+    prompt:InputHoldBegin()
+    task.wait(HOLD_TIME + HOLD_BUFFER)
+    prompt:InputHoldEnd()
+    
+    -- Extra instant trigger (covers games that prefer this)
+    task.wait(0.05)
+    fireproximityprompt(prompt)
+    
+    return true
+end
+
+-- Main loop
+spawn(function()
+    while true do
+        task.wait(CHECK_INTERVAL)
+        
+        if not getgenv().AutoStealOn then
+            continue
+        end
+        
+        local stolen = 0
+        for _, entry in ipairs(allPrompts) do
+            if AttemptSteal(entry) then
+                stolen = stolen + 1
+            end
+        end
+        
+        if stolen > 0 then
+            print("Stole from " .. stolen .. " blocks this cycle")
+        end
+    end
+end)
+
+-- UI Toggle (add to your Tab / library)
+Tab:AddToggle({
+    Name = "Auto Steal (Walk Close Only)",
+    Default = false,
+    Callback = function(enabled)
+        getgenv().AutoStealOn = enabled
+        print("Auto Steal " .. (enabled and "ENABLED – walk near blocks!" or "DISABLED"))
+    end
+})
+
+Tab:AddButton({
+    Name = "Refresh Prompt List",
+    Callback = function()
+        allPrompts = GetAllPrompts()
+    end
+})
+
+print("Walk-to-steal script loaded – toggle on, get close (within ~10 studs), and it should grab them!")
+
+local friendsFolder = workspace.Live.Friends
+local player = game.Players.LocalPlayer
+
+-- Dynamically get valid friend names (only BaseParts or Models with PrimaryPart)
+local options = {}
+for _, obj in pairs(friendsFolder:GetChildren()) do
+    if obj:IsA("BasePart") or (obj:IsA("Model") and obj.PrimaryPart) then
+        table.insert(options, obj.Name)
+    end
+end
+table.sort(options)  -- Alphabetize for easy finding
+
+-- Create the dropdown
+Tab:AddDropdown({
+    Name = "Teleport to Friend",
+    Default = options[1] or "No Friends",
+    Options = options,
+    Callback = function(Value)
+        local targetObj = friendsFolder:FindFirstChild(Value)
+        if targetObj then
+            local targetCFrame
+            if targetObj:IsA("BasePart") then
+                targetCFrame = targetObj.CFrame
+            elseif targetObj:IsA("Model") and targetObj.PrimaryPart then
+                targetCFrame = targetObj.PrimaryPart.CFrame
+            end
+            
+            if targetCFrame then
+                -- Safely get character (handles respawn/death)
+                local character = player.Character
+                if not character then
+                    character = player.CharacterAdded:Wait()
+                end
+                local root = character:WaitForChild("HumanoidRootPart")
+                
+                root.CFrame = targetCFrame
+                print("🧍 Teleported to: " .. Value)
+            else
+                print("❌ No valid CFrame for: " .. Value)
+            end
+        else
+            print("❌ Friend not found: " .. Value)
+        end
+    end
+})
+
+print("Dropdown added! Found " .. #options .. " teleportable friends")
