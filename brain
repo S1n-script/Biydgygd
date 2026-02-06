@@ -308,43 +308,53 @@ Tab:AddDropdown({
 
 print("Dropdown added! Found " .. #options .. " teleportable friends")
 
-local NoClipEnabled = false
-
-local function setNoClip(enabled)
-    NoClipEnabled = enabled
+-- NoClip Toggle
+local NoClip = false
+local function toggleNoClip(state)
+    NoClip = state
+    
+    if not NoClip then
+        -- Turn off: restore collision
+        local char = game.Players.LocalPlayer.Character
+        if char then
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") or part:IsA("MeshPart") then
+                    part.CanCollide = true
+                end
+            end
+        end
+        return
+    end
+    
+    -- NoClip ON → main loop
+    task.spawn(function()
+        while NoClip do
+            local char = game.Players.LocalPlayer.Character
+            if not char then
+                task.wait(0.4)
+                continue
+            end
+            
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") or part:IsA("MeshPart") then
+                    if part.CanCollide ~= false then
+                        part.CanCollide = false
+                    end
+                end
+            end
+            
+            task.wait(0.25) -- refresh rate (lower = smoother but more cpu)
+        end
+    end)
 end
 
--- Keep trying to disable collision while active
-game:GetService("RunService").Stepped:Connect(function()
-    if not NoClipEnabled then return end
-    
-    local char = game.Players.LocalPlayer.Character
-    if char then
-        for _, v in pairs(char:GetDescendants()) do
-            if v:IsA("BasePart") or v:IsA("MeshPart") then
-                v.CanCollide = false
-            end
-        end
-    end
-end)
-
--- Also handle character respawn
-game.Players.LocalPlayer.CharacterAdded:Connect(function(char)
-    if NoClipEnabled then
-        task.wait(0.35) -- small delay after spawn
-        for _, v in pairs(char:GetDescendants()) do
-            if v:IsA("BasePart") or v:IsA("MeshPart") then
-                v.CanCollide = false
-            end
-        end
-    end
-end)
-
 Tab:AddToggle({
-    Name = "NoClip (Walk Through Objects)",
+    Name = "NoClip (FREE VIP ZONE)",
     Default = false,
     Callback = function(Value)
-        setNoClip(Value)
-        print("NoClip is now: " .. (Value and "ON" or "OFF"))
+        toggleNoClip(Value)
+        print("NoClip " .. (Value and "ENABLED" or "DISABLED"))
     end
 })
+
+--loadstring(game:HttpGet("https://raw.githubusercontent.com/S1n-script/Biydgygd/refs/heads/main/brain"))()
