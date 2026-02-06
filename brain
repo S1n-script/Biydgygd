@@ -90,7 +90,7 @@ Tab:AddToggle({
             task.spawn(function()
                 while UpgSpeed do
                     local args = {
-                        4
+                        1
                     }
                     game:GetService("ReplicatedStorage"):WaitForChild("SharedModules"):WaitForChild("Network"):WaitForChild("Remotes"):WaitForChild("Buy Speed Upgrade"):FireServer(unpack(args))
                     task.wait(0.5) -- Short delay to avoid overwhelming the server
