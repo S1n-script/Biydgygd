@@ -832,5 +832,5 @@ MiscTab:CreateButton({
 })
 
 -- Credits / info label at bottom
-MiscTab:CreateLabel("HM HUB • by hollowBros • Marksville, LA • 2026")
+MiscTab:CreateLabel("HM HUB • by hollowBros • 2026")
 MiscTab:CreateLabel("Misc tools & quality-of-life features")
