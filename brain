@@ -37,59 +37,86 @@ local Window = Rayfield:CreateWindow({
    }
 })
 
--- After Window creation
+local Tab = Window:CreateTab("Tab Example", 4483362458) -- Title, Image
 
-local MainTab    = Window:CreateTab("Main",    "home")          -- Lucide icon
-local PlayerTab  = Window:CreateTab("Player",  "user")          -- or "person-standing"
-local GameTab    = Window:CreateTab("Game",    "gamepad-2")
-local VisualTab  = Window:CreateTab("Visuals", "eye")
-local SettingsTab = Window:CreateTab("Settings", "settings")
+local autoClickEnabled = false  -- Define it here (local to script scope)
 
--- Inside tabs, use sections for grouping
-local PlayerSection = PlayerTab:CreateSection("Character Mods")
-local SpeedSection  = PlayerTab:CreateSection("Movement")
-
--- Optional visual separation
-MainTab:CreateDivider()   -- Or use :CreateParagraph() for headers/info
-
-local Collect = false
-
-Tab:AddToggle({
-    Name = "AutoCollect (Near Base)",
-    Default = false,
-    Callback = function(Value)
-        Collect = Value
-        
-        if Collect then
-            task.spawn(function()
-                while Collect do
-                    local collectIDs = {
-                        "1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
-                            "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
-                            "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
-                            "31", "32", "33", "34", "35", "36", "37", "38", "39", "40",
-                            "41", "42", "43", "44", "45", "46", "47", "48", "49", "50",
-                            "51", "52", "53", "54", "55", "56", "57", "58", "59", "60",
-                            "61", "62", "63", "64", "65", "66", "67", "68", "69", "70",
-                            "71", "72", "73", "74", "75", "76", "77", "78", "79", "80",
-                            "81", "82", "83", "84", "85", "86", "87", "88", "89", "90",
-                            "91", "92", "93", "94", "95", "96", "97", "98", "99", "100"                    }
-                    
-                    local remotesFolder = game:GetService("ReplicatedStorage")
-                        :WaitForChild("SharedModules")
-                        :WaitForChild("Network")
-                        :WaitForChild("Remotes")
-                    
-                    local collectRemote = remotesFolder:WaitForChild("Collect Earnings")
-                    
-                    for _, id in ipairs(collectIDs) do
-                        collectRemote:FireServer(id)
-                        task.wait(0.2)
-                    end
-                    
-                    task.wait(2)
-                end
-            end)
-        end
-    end
+Tab:CreateToggle({
+   Name = "Auto Click (Collect Earnings)",
+   CurrentValue = false,
+   Flag = "AutoClickToggle",  -- Better flag name (unique & descriptive)
+   Callback = function(Value)
+      autoClickEnabled = Value
+      
+      if Value then
+         Rayfield:Notify({
+            Title = "Auto Click",
+            Content = "Started collecting earnings (IDs 1-100)...",
+            Duration = 4,
+            Image = "play"
+         })
+         
+         task.spawn(function()
+            while autoClickEnabled do  -- Check flag every loop
+               local success, err = pcall(function()
+                  local collectIDs = {
+                     "1","2","3","4","5","6","7","8","9","10",
+                     "11","12","13","14","15","16","17","18","19","20",
+                     "21","22","23","24","25","26","27","28","29","30",
+                     "31","32","33","34","35","36","37","38","39","40",
+                     "41","42","43","44","45","46","47","48","49","50",
+                     "51","52","53","54","55","56","57","58","59","60",
+                     "61","62","63","64","65","66","67","68","69","70",
+                     "71","72","73","74","75","76","77","78","79","80",
+                     "81","82","83","84","85","86","87","88","89","90",
+                     "91","92","93","94","95","96","97","98","99","100"
+                  }
+                  
+                  local remotesFolder = game:GetService("ReplicatedStorage")
+                     :WaitForChild("SharedModules", 5)          -- Timeout to avoid infinite wait
+                     :WaitForChild("Network", 5)
+                     :WaitForChild("Remotes", 5)
+                  
+                  if not remotesFolder then
+                     error("Remotes folder not found!")
+                  end
+                  
+                  local collectRemote = remotesFolder:FindFirstChild("Collect Earnings")
+                  if not collectRemote then
+                     error("Collect Earnings remote not found!")
+                  end
+                  
+                  for _, id in ipairs(collectIDs) do
+                     if not autoClickEnabled then break end  -- Early exit if toggled off
+                     collectRemote:FireServer(id)
+                     task.wait(0.2)  -- Keep short delay per fire
+                  end
+               end)
+               
+               if not success then
+                  warn("Auto Click error: " .. tostring(err))
+                  Rayfield:Notify({
+                     Title = "Auto Click Error",
+                     Content = "Something went wrong: " .. tostring(err),
+                     Duration = 6,
+                     Image = "alert-triangle"
+                  })
+                  task.wait(3)  -- Pause before retry
+               end
+               
+               task.wait(4)  -- Delay after full cycle (prevent spam/kick)
+            end
+            
+            -- Optional: notify when actually stopped
+            if not autoClickEnabled then
+               Rayfield:Notify({
+                  Title = "Auto Click",
+                  Content = "Stopped.",
+                  Duration = 3,
+                  Image = "pause"
+               })
+            end
+         end)
+      end
+   end,
 })
