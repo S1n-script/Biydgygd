@@ -558,95 +558,34 @@ Tab:CreateButton({
             Image = "refresh-cw"
         })
     end
--- ─── Dropdown + Confirm Button: Select → Confirm Steal ───────────
+})
 
-local selectedFriend = nil
-local stealDropdown = nil  -- Will hold the dropdown object
-
--- Helper function to rebuild friend list and update dropdown
-local function RefreshFriendOptions()
-    local options = {"Select Friend"}
-    
-    local count = 0
-    for _, obj in pairs(FriendsFolder:GetChildren()) do
-        if obj:IsA("BasePart") or (obj:IsA("Model") and obj.PrimaryPart) then
-            table.insert(options, obj.Name)
-            count = count + 1
-        end
+-- ─── Dropdown: Teleport + Steal + Return ─────────────────────────
+local options = {"Select Friend"}
+for _, obj in pairs(FriendsFolder:GetChildren()) do
+    if obj:IsA("BasePart") or (obj:IsA("Model") and obj.PrimaryPart) then
+        table.insert(options, obj.Name)
     end
-    
-    table.sort(options)
-    
-    print("RefreshFriendOptions → Found " .. count .. " valid friends")
-    
-    if stealDropdown and stealDropdown.SetOptions then
-        stealDropdown:SetOptions(options)
-        stealDropdown:SetCurrentOption("Select Friend")  -- Reset selection
-        Rayfield:Notify({
-            Title = "Friends Refreshed",
-            Content = "Dropdown updated – " .. count .. " friends loaded",
-            Duration = 4,
-            Image = "refresh-cw"
-        })
-    end
-    
-    return options
 end
+table.sort(options)
 
--- Create the dropdown once (initial empty-ish state)
-stealDropdown = Tab:CreateDropdown({
-    Name = "Select Friend to Steal",
-    Options = RefreshFriendOptions(),  -- Build once at start
+Tab:CreateDropdown({
+    Name = "TP → Steal Friend → Return",
+    Options = options,
     CurrentOption = "Select Friend",
     Flag = "StealFriendDropdown",
     Callback = function(Value)
-        local chosen = (type(Value) == "table" and Value[1]) or Value
-        if type(chosen) ~= "string" then chosen = "Select Friend" end
+        -- Safety handling for possible table input
+        local selected = (type(Value) == "table" and Value[1]) or Value
+        if type(selected) ~= "string" then selected = "Select Friend" end
 
-        if chosen == "Select Friend" or chosen == "" then
-            selectedFriend = nil
-            return
-        end
+        if selected == "Select Friend" or selected == "" then return end
 
-        selectedFriend = chosen
-        
-        Rayfield:Notify({
-            Title = "Selected",
-            Content = "Friend: " .. selectedFriend .. "\nNow press 'Confirm Steal'",
-            Duration = 3.5,
-            Image = "user-check"
-        })
-    end
-})
-
--- Refresh button – updates BOTH prompts AND dropdown friends list
-Tab:CreateButton({
-    Name = "Refresh Friends & Prompts",
-    Callback = function()
-        allPrompts = GetAllPrompts()              -- Update steal prompts
-        RefreshFriendOptions()                    -- Update dropdown list
-    end
-})
-
--- Confirm button – only acts when pressed
-Tab:CreateButton({
-    Name = "Confirm Steal Selected Friend",
-    Callback = function()
-        if not selectedFriend then
-            Rayfield:Notify({
-                Title = "No Friend Selected",
-                Content = "Pick a friend from the dropdown first!",
-                Duration = 4,
-                Image = "alert-triangle"
-            })
-            return
-        end
-
-        local targetObj = FriendsFolder:FindFirstChild(selectedFriend)
+        local targetObj = FriendsFolder:FindFirstChild(selected)
         if not targetObj then
             Rayfield:Notify({
                 Title = "Error",
-                Content = "Friend disappeared: " .. selectedFriend,
+                Content = "Friend not found: " .. selected,
                 Duration = 4,
                 Image = "alert-triangle"
             })
@@ -675,7 +614,7 @@ Tab:CreateButton({
 
         local targetEntry
         for _, entry in ipairs(allPrompts) do
-            if entry.FriendName == selectedFriend then
+            if entry.FriendName == selected then
                 targetEntry = entry
                 break
             end
@@ -686,25 +625,21 @@ Tab:CreateButton({
             success = AttemptSteal(targetEntry, true)
             task.wait(0.9)
         else
-            print("No prompt for: " .. selectedFriend .. " – refresh?")
+            print("No StealPrompt for: " .. selected)
         end
 
         root.CFrame = originalCFrame
 
         Rayfield:Notify({
-            Title = "Steal Result",
-            Content = success 
-                and ("Stole from " .. selectedFriend .. " → back") 
-                or ("Failed: " .. selectedFriend),
+            Title = "Steal Action",
+            Content = success and ("Stole from " .. selected .. " → returned") or ("Failed to steal from " .. selected),
             Duration = 5,
             Image = success and "check-circle" or "alert-triangle"
         })
-
-        -- Optional: reset after action
-        -- selectedFriend = nil
-        -- stealDropdown:SetCurrentOption("Select Friend")
     end
 })
+
+print("Auto Steal module loaded")
 
 -- ──────────────────────────────────────────────────────────────
 -- Misc Tab / Section
