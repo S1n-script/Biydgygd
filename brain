@@ -37,7 +37,7 @@ local Window = Rayfield:CreateWindow({
    }
 })
 
-local Tab = Window:CreateTab("Tab Example", 4483362458) -- Title, Image
+local Tab = Window:CreateTab("Auto Features", 4483362458) -- Title, Image
 
 local autoClickEnabled = false  -- Define it here (local to script scope)
 
@@ -112,11 +112,99 @@ Tab:CreateToggle({
                Rayfield:Notify({
                   Title = "Auto Click",
                   Content = "Stopped.",
-                  Duration = 3,
+                  Duration = 1.5,
                   Image = "pause"
                })
             end
          end)
+      end
+   end,
+})
+
+local UpgFriend = false  -- Define outside (script scope)
+
+Tab:CreateToggle({
+   Name = "Auto Friend Upgrade (1–100)",
+   CurrentValue = false,
+   Flag = "AutoFriendUpgrade",  -- Unique flag for config saving
+   Callback = function(Value)
+      UpgFriend = Value
+      
+      if Value then
+         Rayfield:Notify({
+            Title = "Auto Friend Upgrade",
+            Content = "Started upgrading friends (IDs 1–100)...",
+            Duration = 4,
+            Image = "play"
+         })
+         
+         task.spawn(function()
+            while UpgFriend do
+               local success, err = pcall(function()
+                  local friendIDs = {  -- renamed for clarity
+                     "1","2","3","4","5","6","7","8","9","10",
+                     "11","12","13","14","15","16","17","18","19","20",
+                     "21","22","23","24","25","26","27","28","29","30",
+                     "31","32","33","34","35","36","37","38","39","40",
+                     "41","42","43","44","45","46","47","48","49","50",
+                     "51","52","53","54","55","56","57","58","59","60",
+                     "61","62","63","64","65","66","67","68","69","70",
+                     "71","72","73","74","75","76","77","78","79","80",
+                     "81","82","83","84","85","86","87","88","89","90",
+                     "91","92","93","94","95","96","97","98","99","100"
+                  }
+                  
+                  local remotesFolder = game:GetService("ReplicatedStorage")
+                     :WaitForChild("SharedModules", 8)    -- Slightly longer timeout
+                     :WaitForChild("Network", 5)
+                     :WaitForChild("Remotes", 5)
+                  
+                  if not remotesFolder then
+                     error("Remotes folder path not found")
+                  end
+                  
+                  local upgradeRemote = remotesFolder:FindFirstChild("Upgrade Friend")
+                  if not upgradeRemote then
+                     error("Remote 'Upgrade Friend' not found")
+                  end
+                  
+                  for _, id in ipairs(friendIDs) do
+                     if not UpgFriend then break end  -- Early stop if toggled off mid-cycle
+                     upgradeRemote:FireServer(id)
+                     task.wait(0.35)  -- Slightly longer delay → safer against kick/rate-limit
+                  end
+               end)
+               
+               if not success then
+                  warn("[Auto Friend Upgrade] Error: " .. tostring(err))
+                  Rayfield:Notify({
+                     Title = "Upgrade Error",
+                     Content = "Failed: " .. tostring(err or "unknown"),
+                     Duration = 7,
+                     Image = "alert-triangle"
+                  })
+                  task.wait(5)  -- Longer cooldown on error
+               end
+               
+               task.wait(6)  -- Full cycle cooldown (after 100 attempts) – adjust if needed
+            end
+            
+            -- Only notify on actual stop (not every loop)
+            Rayfield:Notify({
+               Title = "Auto Friend Upgrade",
+               Content = "Stopped.",
+               Duration = 2.5,
+               Image = "pause"
+            })
+         end)
+      else
+         -- Optional: immediate feedback when turning off
+         Rayfield:Notify({
+            Title = "Auto Friend Upgrade",
+            Content = "Stopping...",
+            Duration = 2,
+            Image = "pause"
+         })
       end
    end,
 })
