@@ -561,26 +561,30 @@ Tab:CreateButton({
 -- ─── Dropdown + Confirm Button: Select → Confirm Steal ───────────
 
 local selectedFriend = nil
-local dropdownInstance = nil  -- We'll store the dropdown object to update it later
+local stealDropdown = nil  -- Will hold the dropdown object
 
--- Function to build/update dropdown options
-local function UpdateDropdownOptions()
+-- Helper function to rebuild friend list and update dropdown
+local function RefreshFriendOptions()
     local options = {"Select Friend"}
     
+    local count = 0
     for _, obj in pairs(FriendsFolder:GetChildren()) do
         if obj:IsA("BasePart") or (obj:IsA("Model") and obj.PrimaryPart) then
             table.insert(options, obj.Name)
+            count = count + 1
         end
     end
     
     table.sort(options)
     
-    if dropdownInstance and dropdownInstance.SetOptions then
-        -- If dropdown already exists, update its options
-        dropdownInstance:SetOptions(options)
+    print("RefreshFriendOptions → Found " .. count .. " valid friends")
+    
+    if stealDropdown and stealDropdown.SetOptions then
+        stealDropdown:SetOptions(options)
+        stealDropdown:SetCurrentOption("Select Friend")  -- Reset selection
         Rayfield:Notify({
-            Title = "Dropdown Updated",
-            Content = "Friend list refreshed – " .. (#options - 1) .. " friends loaded",
+            Title = "Friends Refreshed",
+            Content = "Dropdown updated – " .. count .. " friends loaded",
             Duration = 4,
             Image = "refresh-cw"
         })
@@ -589,10 +593,10 @@ local function UpdateDropdownOptions()
     return options
 end
 
--- Create the dropdown once
-dropdownInstance = Tab:CreateDropdown({
+-- Create the dropdown once (initial empty-ish state)
+stealDropdown = Tab:CreateDropdown({
     Name = "Select Friend to Steal",
-    Options = UpdateDropdownOptions(),  -- Initial build
+    Options = RefreshFriendOptions(),  -- Build once at start
     CurrentOption = "Select Friend",
     Flag = "StealFriendDropdown",
     Callback = function(Value)
@@ -607,52 +611,98 @@ dropdownInstance = Tab:CreateDropdown({
         selectedFriend = chosen
         
         Rayfield:Notify({
-            Title = "Friend Selected",
-            Content = "Ready to steal from: " .. selectedFriend .. "\nClick 'Steal Selected' below",
-            Duration = 4,
+            Title = "Selected",
+            Content = "Friend: " .. selectedFriend .. "\nNow press 'Confirm Steal'",
+            Duration = 3.5,
             Image = "user-check"
         })
     end
 })
 
--- Refresh button now also updates the dropdown
+-- Refresh button – updates BOTH prompts AND dropdown friends list
 Tab:CreateButton({
-    Name = "Refresh Friend & Prompt List",
+    Name = "Refresh Friends & Prompts",
     Callback = function()
-        allPrompts = GetAllPrompts()  -- Refresh prompts for stealing
-        UpdateDropdownOptions()       -- Rebuild dropdown options
+        allPrompts = GetAllPrompts()              -- Update steal prompts
+        RefreshFriendOptions()                    -- Update dropdown list
     end
 })
 
--- Confirm steal button (unchanged from before)
+-- Confirm button – only acts when pressed
 Tab:CreateButton({
-    Name = "Steal Selected Friend (TP → Steal → Return)",
+    Name = "Confirm Steal Selected Friend",
     Callback = function()
         if not selectedFriend then
             Rayfield:Notify({
-                Title = "Nothing Selected",
-                Content = "Choose a friend from the dropdown first!",
+                Title = "No Friend Selected",
+                Content = "Pick a friend from the dropdown first!",
                 Duration = 4,
                 Image = "alert-triangle"
             })
             return
         end
 
-        -- ... (keep the rest of your TP → steal → return code exactly as before) ...
+        local targetObj = FriendsFolder:FindFirstChild(selectedFriend)
+        if not targetObj then
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "Friend disappeared: " .. selectedFriend,
+                Duration = 4,
+                Image = "alert-triangle"
+            })
+            return
+        end
 
-        -- After success or fail:
+        local targetCFrame
+        if targetObj:IsA("BasePart") then
+            targetCFrame = targetObj.CFrame
+        elseif targetObj:IsA("Model") and targetObj.PrimaryPart then
+            targetCFrame = targetObj.PrimaryPart.CFrame
+        end
+
+        if not targetCFrame then return end
+
+        local char = player.Character
+        if not char or not char.Parent then
+            char = player.CharacterAdded:Wait()
+        end
+        local root = char:WaitForChild("HumanoidRootPart", 5)
+
+        local originalCFrame = root.CFrame
+
+        root.CFrame = targetCFrame * TP_OFFSET
+        task.wait(0.18)
+
+        local targetEntry
+        for _, entry in ipairs(allPrompts) do
+            if entry.FriendName == selectedFriend then
+                targetEntry = entry
+                break
+            end
+        end
+
+        local success = false
+        if targetEntry then
+            success = AttemptSteal(targetEntry, true)
+            task.wait(0.9)
+        else
+            print("No prompt for: " .. selectedFriend .. " – refresh?")
+        end
+
+        root.CFrame = originalCFrame
+
         Rayfield:Notify({
-            Title = "Steal Action",
+            Title = "Steal Result",
             Content = success 
-                and ("Stole from " .. selectedFriend .. " → returned") 
-                or ("Failed to steal from " .. selectedFriend),
+                and ("Stole from " .. selectedFriend .. " → back") 
+                or ("Failed: " .. selectedFriend),
             Duration = 5,
             Image = success and "check-circle" or "alert-triangle"
         })
 
-        -- Optional: clear selection after steal
+        -- Optional: reset after action
         -- selectedFriend = nil
-        -- dropdownInstance:SetCurrentOption("Select Friend")  -- Reset dropdown display
+        -- stealDropdown:SetCurrentOption("Select Friend")
     end
 })
 
