@@ -642,20 +642,18 @@ Tab:CreateDropdown({
 print("Auto Steal module loaded")
 
 -- ──────────────────────────────────────────────────────────────
--- Misc Tab / Section
+-- Misc Tab – Enhanced 2026 Edition
 -- ──────────────────────────────────────────────────────────────
 
-local MiscTab = Window:CreateTab("Misc", "settings")  -- or whatever icon you like
+local MiscTab = Window:CreateTab("Misc", "settings")
 
 -- ┌────────────────────────────────────────────────────────────┐
--- │ NoClip Toggle                                              │
+-- │ NoClip (already have – keeping for completeness)           │
 -- └────────────────────────────────────────────────────────────┘
 local NoClipEnabled = false
 
--- Main loop that disables collision
 game:GetService("RunService").Stepped:Connect(function()
     if not NoClipEnabled then return end
-    
     local char = player.Character
     if char then
         for _, part in pairs(char:GetDescendants()) do
@@ -666,10 +664,9 @@ game:GetService("RunService").Stepped:Connect(function()
     end
 end)
 
--- Handle character respawn / reload
 player.CharacterAdded:Connect(function(char)
     if NoClipEnabled then
-        task.wait(0.4)  -- small delay after spawn
+        task.wait(0.4)
         for _, part in pairs(char:GetDescendants()) do
             if part:IsA("BasePart") or part:IsA("MeshPart") then
                 part.CanCollide = false
@@ -684,21 +681,20 @@ MiscTab:CreateToggle({
     Flag = "Misc_NoClip",
     Callback = function(Value)
         NoClipEnabled = Value
-        
         Rayfield:Notify({
             Title = "NoClip",
-            Content = Value and "Enabled – walk through objects" or "Disabled",
-            Duration = 3.5,
+            Content = Value and "Enabled" or "Disabled",
+            Duration = 3,
             Image = Value and "ghost" or "ban"
         })
     end
 })
 
 -- ┌────────────────────────────────────────────────────────────┐
--- │ Anti-AFK Toggle                                            │
+-- │ Anti-AFK (improved version)                                │
 -- └────────────────────────────────────────────────────────────┘
 local AntiAFKEnabled = false
-local AntiAFKConnection
+local AntiAFKConn
 
 MiscTab:CreateToggle({
     Name = "Anti-AFK (Stay Online)",
@@ -706,60 +702,135 @@ MiscTab:CreateToggle({
     Flag = "Misc_AntiAFK",
     Callback = function(Value)
         AntiAFKEnabled = Value
-        
         if Value then
-            -- Simple & reliable method: simulate jump every ~4–5 minutes
-            AntiAFKConnection = game:GetService("RunService").Heartbeat:Connect(function()
+            AntiAFKConn = game:GetService("RunService").Heartbeat:Connect(function()
                 if not AntiAFKEnabled then return end
-                
-                -- Only act every ~240–300 seconds (4–5 min)
-                if tick() % 270 < 0.1 then
-                    local char = player.Character
-                    if char and char:FindFirstChild("Humanoid") then
-                        char.Humanoid.Jump = true
+                if tick() % 240 < 0.2 then  -- ~every 4 minutes
+                    local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        hum.Jump = true
                     end
                 end
             end)
-            
-            Rayfield:Notify({
-                Title = "Anti-AFK",
-                Content = "Enabled – you'll stay online (simulated movement)",
-                Duration = 4,
-                Image = "shield"
-            })
+            Rayfield:Notify({Title = "Anti-AFK", Content = "Enabled – auto jump every ~4 min", Duration = 4, Image = "shield"})
         else
-            if AntiAFKConnection then
-                AntiAFKConnection:Disconnect()
-                AntiAFKConnection = nil
-            end
-            
-            Rayfield:Notify({
-                Title = "Anti-AFK",
-                Content = "Disabled",
-                Duration = 3,
-                Image = "power-off"
-            })
+            if AntiAFKConn then AntiAFKConn:Disconnect() end
+            Rayfield:Notify({Title = "Anti-AFK", Content = "Disabled", Duration = 3, Image = "power-off"})
         end
     end
 })
 
 -- ┌────────────────────────────────────────────────────────────┐
--- │ Destroy UI Button                                          │
+-- │ Infinite Jump (toggleable)                                 │
+-- └────────────────────────────────────────────────────────────┘
+local InfiniteJumpEnabled = false
+local InfJumpConn
+
+MiscTab:CreateToggle({
+    Name = "Infinite Jump",
+    CurrentValue = false,
+    Flag = "Misc_InfJump",
+    Callback = function(Value)
+        InfiniteJumpEnabled = Value
+        if Value then
+            InfJumpConn = game:GetService("UserInputService").JumpRequest:Connect(function()
+                if InfiniteJumpEnabled then
+                    local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        hum:ChangeState("Jumping")
+                    end
+                end
+            end)
+            Rayfield:Notify({Title = "Infinite Jump", Content = "Enabled – press space to fly up", Duration = 4, Image = "chevrons-up"})
+        else
+            if InfJumpConn then InfJumpConn:Disconnect() end
+            Rayfield:Notify({Title = "Infinite Jump", Content = "Disabled", Duration = 3, Image = "chevron-down"})
+        end
+    end
+})
+
+-- ┌────────────────────────────────────────────────────────────┐
+-- │ Speed Changer (slider)                                     │
+-- └────────────────────────────────────────────────────────────┘
+MiscTab:CreateSlider({
+    Name = "Walk Speed",
+    Range = {16, 250},
+    Increment = 5,
+    Suffix = "studs/sec",
+    CurrentValue = 16,
+    Flag = "Misc_WalkSpeed",
+    Callback = function(Value)
+        local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.WalkSpeed = Value
+        end
+    end
+})
+
+-- ┌────────────────────────────────────────────────────────────┐
+-- │ Jump Power Slider                                          │
+-- └────────────────────────────────────────────────────────────┘
+MiscTab:CreateSlider({
+    Name = "Jump Power",
+    Range = {50, 300},
+    Increment = 10,
+    Suffix = "force",
+    CurrentValue = 50,
+    Flag = "Misc_JumpPower",
+    Callback = function(Value)
+        local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.JumpPower = Value
+        end
+    end
+})
+
+-- ┌────────────────────────────────────────────────────────────┐
+-- │ Fullbright (toggle)                                        │
+-- └────────────────────────────────────────────────────────────┘
+local FullbrightEnabled = false
+local Lighting = game:GetService("Lighting")
+
+MiscTab:CreateToggle({
+    Name = "Fullbright (Max Brightness)",
+    CurrentValue = false,
+    Flag = "Misc_Fullbright",
+    Callback = function(Value)
+        FullbrightEnabled = Value
+        if Value then
+            Lighting.Brightness = 2
+            Lighting.GlobalShadows = false
+            Lighting.FogEnd = 9e9
+            Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+            Rayfield:Notify({Title = "Fullbright", Content = "Enabled – everything lit up", Duration = 4, Image = "sun"})
+        else
+            -- Reset to defaults (adjust if game has custom lighting)
+            Lighting.Brightness = 1
+            Lighting.GlobalShadows = true
+            Lighting.FogEnd = 100000
+            Lighting.Ambient = Color3.fromRGB(128, 128, 128)
+            Rayfield:Notify({Title = "Fullbright", Content = "Disabled", Duration = 3, Image = "moon"})
+        end
+    end
+})
+
+-- ┌────────────────────────────────────────────────────────────┐
+-- │ Destroy UI (close hub completely)                          │
 -- └────────────────────────────────────────────────────────────┘
 MiscTab:CreateButton({
     Name = "Destroy / Close Hub",
     Callback = function()
         Rayfield:Notify({
-            Title = "Closing Hub",
-            Content = "HM HUB will now close...",
+            Title = "Closing",
+            Content = "HM HUB shutting down...",
             Duration = 2.5,
             Image = "x-circle"
         })
-        
-        task.wait(0.6)  -- small delay so user sees the message
+        task.wait(0.8)
         Rayfield:Destroy()
     end
 })
 
--- Optional: small label/credits at bottom
-MiscTab:CreateLabel("HM HUB • by hollowBros • 2026")
+-- Credits / info label at bottom
+MiscTab:CreateLabel("HM HUB • by hollowBros • Marksville, LA • 2026")
+MiscTab:CreateLabel("Misc tools & quality-of-life features")
