@@ -426,6 +426,8 @@ local Toggle = Tab:CreateToggle({
    end,
 })
 
+local MiscTab = Window:CreateTab("Steal Friends", "settings")  -- or whatever icon you like
+
 -- ──────────────────────────────────────────────────────────────
 -- Auto Steal (Proximity Prompts) - Walk Close + TP Steal
 -- ──────────────────────────────────────────────────────────────
