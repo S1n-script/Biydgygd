@@ -834,3 +834,28 @@ MiscTab:CreateButton({
 -- Credits / info label at bottom
 MiscTab:CreateLabel("HM HUB • by hollowBros • 2026")
 MiscTab:CreateLabel("Misc tools & quality-of-life features")
+
+local GodmodeEnabled = false
+
+MiscTab:CreateToggle({
+    Name = "Godmode (Regen Health)",
+    CurrentValue = false,
+    Flag = "Misc_Godmode",
+    Callback = function(Value)
+        GodmodeEnabled = Value
+        if Value then
+            spawn(function()
+                while GodmodeEnabled do
+                    local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        hum.Health = hum.MaxHealth
+                    end
+                    task.wait(0.3)
+                end
+            end)
+            Rayfield:Notify({Title = "Godmode", Content = "Enabled", Duration = 3, Image = "shield"})
+        else
+            Rayfield:Notify({Title = "Godmode", Content = "Disabled", Duration = 3, Image = "shield-off"})
+        end
+    end
+})
