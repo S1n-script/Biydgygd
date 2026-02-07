@@ -426,7 +426,7 @@ local Toggle = Tab:CreateToggle({
    end,
 })
 
-local MiscTab = Window:CreateTab("Steal Friends", "settings")  -- or whatever icon you like
+local Tab = Window:CreateTab("Steal Friends", 4483362458) -- Title, Image
 
 -- ──────────────────────────────────────────────────────────────
 -- Auto Steal (Proximity Prompts) - Walk Close + TP Steal
@@ -560,32 +560,59 @@ Tab:CreateButton({
     end
 })
 
--- ─── Dropdown: Teleport + Steal + Return ─────────────────────────
-local options = {"Select Friend"}
-for _, obj in pairs(FriendsFolder:GetChildren()) do
-    if obj:IsA("BasePart") or (obj:IsA("Model") and obj.PrimaryPart) then
-        table.insert(options, obj.Name)
-    end
-end
-table.sort(options)
+-- ─── Dropdown + Confirm Button: Select → Confirm Steal ───────────
 
+-- Store the currently selected friend (starts as nil)
+local selectedFriend = nil
+
+-- Dropdown – only selects, no action on pick
 Tab:CreateDropdown({
-    Name = "TP → Steal Friend → Return",
+    Name = "Select Friend to Steal",
     Options = options,
     CurrentOption = "Select Friend",
     Flag = "StealFriendDropdown",
     Callback = function(Value)
-        -- Safety handling for possible table input
-        local selected = (type(Value) == "table" and Value[1]) or Value
-        if type(selected) ~= "string" then selected = "Select Friend" end
+        -- Safety for possible table input
+        local chosen = (type(Value) == "table" and Value[1]) or Value
+        if type(chosen) ~= "string" then chosen = "Select Friend" end
 
-        if selected == "Select Friend" or selected == "" then return end
+        if chosen == "Select Friend" or chosen == "" then
+            selectedFriend = nil
+            print("No friend selected")
+            return
+        end
 
-        local targetObj = FriendsFolder:FindFirstChild(selected)
+        selectedFriend = chosen
+        print("Selected friend for steal: " .. selectedFriend)
+
+        Rayfield:Notify({
+            Title = "Selection Updated",
+            Content = "Friend selected: " .. selectedFriend .. "\nPress 'Steal Selected' to go",
+            Duration = 3.5,
+            Image = "user-check"
+        })
+    end
+})
+
+-- Confirm button – only triggers when pressed
+Tab:CreateButton({
+    Name = "Steal Selected Friend (TP → Steal → Return)",
+    Callback = function()
+        if not selectedFriend then
+            Rayfield:Notify({
+                Title = "No Selection",
+                Content = "Please select a friend from the dropdown first!",
+                Duration = 4,
+                Image = "alert-triangle"
+            })
+            return
+        end
+
+        local targetObj = FriendsFolder:FindFirstChild(selectedFriend)
         if not targetObj then
             Rayfield:Notify({
                 Title = "Error",
-                Content = "Friend not found: " .. selected,
+                Content = "Friend not found: " .. selectedFriend,
                 Duration = 4,
                 Image = "alert-triangle"
             })
@@ -599,8 +626,17 @@ Tab:CreateDropdown({
             targetCFrame = targetObj.PrimaryPart.CFrame
         end
 
-        if not targetCFrame then return end
+        if not targetCFrame then
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "No valid position for: " .. selectedFriend,
+                Duration = 4,
+                Image = "alert-triangle"
+            })
+            return
+        end
 
+        -- Get character safely
         local char = player.Character
         if not char or not char.Parent then
             char = player.CharacterAdded:Wait()
@@ -609,12 +645,14 @@ Tab:CreateDropdown({
 
         local originalCFrame = root.CFrame
 
+        -- Teleport
         root.CFrame = targetCFrame * TP_OFFSET
         task.wait(0.18)
 
+        -- Find matching prompt entry
         local targetEntry
         for _, entry in ipairs(allPrompts) do
-            if entry.FriendName == selected then
+            if entry.FriendName == selectedFriend then
                 targetEntry = entry
                 break
             end
@@ -625,21 +663,25 @@ Tab:CreateDropdown({
             success = AttemptSteal(targetEntry, true)
             task.wait(0.9)
         else
-            print("No StealPrompt for: " .. selected)
+            print("No StealPrompt found for: " .. selectedFriend)
         end
 
+        -- Return to original position
         root.CFrame = originalCFrame
 
         Rayfield:Notify({
             Title = "Steal Action",
-            Content = success and ("Stole from " .. selected .. " → returned") or ("Failed to steal from " .. selected),
+            Content = success 
+                and ("Stole from " .. selectedFriend .. " → returned") 
+                or ("Failed to steal from " .. selectedFriend),
             Duration = 5,
             Image = success and "check-circle" or "alert-triangle"
         })
+
+        -- Optional: clear selection after action (uncomment if you want)
+        -- selectedFriend = nil
     end
 })
-
-print("Auto Steal module loaded")
 
 -- ──────────────────────────────────────────────────────────────
 -- Misc Tab / Section
