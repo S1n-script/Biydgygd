@@ -426,3 +426,339 @@ local Toggle = Tab:CreateToggle({
    end,
 })
 
+local Tab = Window:CreateTab("Steal Friend", 4483362458) -- Title, Image
+
+-- ──────────────────────────────────────────────────────────────
+-- Auto Steal (Proximity Prompts) - Walk Close + TP Steal
+-- ──────────────────────────────────────────────────────────────
+
+local FriendsFolder = workspace:WaitForChild("Live", 10):WaitForChild("Friends", 5)
+local player = game.Players.LocalPlayer
+
+-- Config
+local HOLD_BUFFER     = 0.28          -- safety after holdDuration
+local CHECK_INTERVAL  = 0.16          -- fast but not CPU heavy
+local DISTANCE_EXTRA  = 3.2           -- generous buffer
+local TP_OFFSET       = CFrame.new(0, 0, -2.2)  -- slightly in front
+
+getgenv().AutoStealOn = false
+
+-- ─── Get all StealPrompts ────────────────────────────────────────
+local function GetAllPrompts()
+    local prompts = {}
+    for _, friend in pairs(FriendsFolder:GetChildren()) do
+        local root = friend:FindFirstChild("RootPart")
+        if root then
+            local prompt = root:FindFirstChild("StealPrompt")
+            if prompt and prompt:IsA("ProximityPrompt") then
+                table.insert(prompts, {
+                    Prompt    = prompt,
+                    RootPart  = root,
+                    FriendName = friend.Name,
+                    MaxDist   = prompt.MaxActivationDistance or 12
+                })
+                -- print("Loaded: " .. friend.Name .. " (dist " .. prompt.MaxActivationDistance .. ")")
+            end
+        end
+    end
+    print("AutoSteal → Found " .. #prompts .. " StealPrompts")
+    return prompts
+end
+
+local allPrompts = GetAllPrompts()
+
+-- ─── Attempt to steal one prompt ─────────────────────────────────
+local function AttemptSteal(entry, force)
+    local char = player.Character
+    if not char then return false end
+
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+
+    local prompt = entry.Prompt
+    if not prompt or not prompt:IsDescendantOf(workspace) or not prompt.Enabled then
+        return false
+    end
+
+    -- Distance check unless forced (TP mode)
+    if not force then
+        local dist = (hrp.Position - entry.RootPart.Position).Magnitude
+        if dist > entry.MaxDist + DISTANCE_EXTRA then
+            return false
+        end
+    end
+
+    print("Stealing → " .. entry.FriendName .. " (force: " .. tostring(force) .. ")")
+
+    -- Dynamic hold duration (most reliable method)
+    local hold = prompt.HoldDuration or 0
+    if hold > 0 then
+        prompt:InputHoldBegin()
+        task.wait(hold + HOLD_BUFFER)
+        prompt:InputHoldEnd()
+    end
+
+    -- Multi-trigger shotgun (covers executor differences & game quirks)
+    task.wait(0.07)
+    fireproximityprompt(prompt)                 -- 1. standard
+    task.wait(0.06)
+    fireproximityprompt(prompt, 0)              -- 2. skip hold
+    task.wait(0.06)
+    fireproximityprompt(prompt, 1)              -- 3. respect hold
+    task.wait(0.07)
+    fireproximityprompt(prompt, 0, true)        -- 4. some games need this
+    task.wait(0.05)
+    fireproximityprompt(prompt)                 -- 5. extra standard
+
+    return true
+end
+
+-- ─── Main scanning loop ───────────────────────────────────────────
+spawn(function()
+    while true do
+        task.wait(CHECK_INTERVAL)
+
+        if not getgenv().AutoStealOn then
+            continue
+        end
+
+        local stolen = 0
+        for _, entry in ipairs(allPrompts) do
+            if AttemptSteal(entry, false) then
+                stolen = stolen + 1
+            end
+        end
+
+        if stolen > 0 then
+            print("Stole from " .. stolen .. " friends this cycle")
+        end
+    end
+end)
+
+-- ─── UI Controls ─────────────────────────────────────────────────
+Tab:CreateToggle({
+    Name = "Auto Steal (Walk Close Only)",
+    CurrentValue = false,
+    Flag = "AutoStealWalkToggle",
+    Callback = function(enabled)
+        getgenv().AutoStealOn = enabled
+        Rayfield:Notify({
+            Title = "Auto Steal",
+            Content = enabled and "Enabled – walk near friends!" or "Disabled",
+            Duration = 3.5,
+            Image = enabled and "play" or "pause"
+        })
+    end
+})
+
+Tab:CreateButton({
+    Name = "Refresh Prompt List",
+    Callback = function()
+        allPrompts = GetAllPrompts()
+        Rayfield:Notify({
+            Title = "Prompt List",
+            Content = "Refreshed – found " .. #allPrompts .. " prompts",
+            Duration = 4,
+            Image = "refresh-cw"
+        })
+    end
+})
+
+-- ─── Dropdown: Teleport + Steal + Return ─────────────────────────
+local options = {"Select Friend"}
+for _, obj in pairs(FriendsFolder:GetChildren()) do
+    if obj:IsA("BasePart") or (obj:IsA("Model") and obj.PrimaryPart) then
+        table.insert(options, obj.Name)
+    end
+end
+table.sort(options)
+
+Tab:CreateDropdown({
+    Name = "TP → Steal Friend → Return",
+    Options = options,
+    CurrentOption = "Select Friend",
+    Flag = "StealFriendDropdown",
+    Callback = function(Value)
+        if Value == "Select Friend" then return end
+
+        local targetObj = FriendsFolder:FindFirstChild(Value)
+        if not targetObj then
+            print("Target not found: " .. Value)
+            return
+        end
+
+        local targetCFrame
+        if targetObj:IsA("BasePart") then
+            targetCFrame = targetObj.CFrame
+        elseif targetObj:IsA("Model") and targetObj.PrimaryPart then
+            targetCFrame = targetObj.PrimaryPart.CFrame
+        end
+
+        if not targetCFrame then return end
+
+        -- Get character safely (handles respawn)
+        local char = player.Character
+        if not char or not char.Parent then
+            char = player.CharacterAdded:Wait()
+        end
+        local root = char:WaitForChild("HumanoidRootPart", 5)
+
+        local originalCFrame = root.CFrame
+
+        -- TP with offset
+        root.CFrame = targetCFrame * TP_OFFSET
+        task.wait(0.18)  -- Let physics settle
+
+        -- Find matching prompt entry
+        local targetEntry
+        for _, entry in ipairs(allPrompts) do
+            if entry.FriendName == Value then
+                targetEntry = entry
+                break
+            end
+        end
+
+        local success = false
+        if targetEntry then
+            success = AttemptSteal(targetEntry, true)  -- force = ignore distance
+            task.wait(0.9)  -- Give time for animation / server sync
+        else
+            print("No StealPrompt found for: " .. Value .. " (refresh list?)")
+        end
+
+        -- Return to original position
+        root.CFrame = originalCFrame
+
+        Rayfield:Notify({
+            Title = "Steal Action",
+            Content = success and ("Stole from " .. Value .. " → returned") or ("Failed to steal from " .. Value),
+            Duration = 5,
+            Image = success and "check-circle" or "alert-triangle"
+        })
+    end
+})
+
+print("Auto Steal module loaded – toggle on + walk or use dropdown")
+
+-- ──────────────────────────────────────────────────────────────
+-- Misc Tab / Section
+-- ──────────────────────────────────────────────────────────────
+
+local MiscTab = Window:CreateTab("Misc", "settings")  -- or whatever icon you like
+
+-- ┌────────────────────────────────────────────────────────────┐
+-- │ NoClip Toggle                                              │
+-- └────────────────────────────────────────────────────────────┘
+local NoClipEnabled = false
+
+-- Main loop that disables collision
+game:GetService("RunService").Stepped:Connect(function()
+    if not NoClipEnabled then return end
+    
+    local char = player.Character
+    if char then
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") or part:IsA("MeshPart") then
+                part.CanCollide = false
+            end
+        end
+    end
+end)
+
+-- Handle character respawn / reload
+player.CharacterAdded:Connect(function(char)
+    if NoClipEnabled then
+        task.wait(0.4)  -- small delay after spawn
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") or part:IsA("MeshPart") then
+                part.CanCollide = false
+            end
+        end
+    end
+end)
+
+MiscTab:CreateToggle({
+    Name = "NoClip (Walk Through Walls)",
+    CurrentValue = false,
+    Flag = "Misc_NoClip",
+    Callback = function(Value)
+        NoClipEnabled = Value
+        
+        Rayfield:Notify({
+            Title = "NoClip",
+            Content = Value and "Enabled – walk through objects" or "Disabled",
+            Duration = 3.5,
+            Image = Value and "ghost" or "ban"
+        })
+    end
+})
+
+-- ┌────────────────────────────────────────────────────────────┐
+-- │ Anti-AFK Toggle                                            │
+-- └────────────────────────────────────────────────────────────┘
+local AntiAFKEnabled = false
+local AntiAFKConnection
+
+MiscTab:CreateToggle({
+    Name = "Anti-AFK (Stay Online)",
+    CurrentValue = false,
+    Flag = "Misc_AntiAFK",
+    Callback = function(Value)
+        AntiAFKEnabled = Value
+        
+        if Value then
+            -- Simple & reliable method: simulate jump every ~4–5 minutes
+            AntiAFKConnection = game:GetService("RunService").Heartbeat:Connect(function()
+                if not AntiAFKEnabled then return end
+                
+                -- Only act every ~240–300 seconds (4–5 min)
+                if tick() % 270 < 0.1 then
+                    local char = player.Character
+                    if char and char:FindFirstChild("Humanoid") then
+                        char.Humanoid.Jump = true
+                    end
+                end
+            end)
+            
+            Rayfield:Notify({
+                Title = "Anti-AFK",
+                Content = "Enabled – you'll stay online (simulated movement)",
+                Duration = 4,
+                Image = "shield"
+            })
+        else
+            if AntiAFKConnection then
+                AntiAFKConnection:Disconnect()
+                AntiAFKConnection = nil
+            end
+            
+            Rayfield:Notify({
+                Title = "Anti-AFK",
+                Content = "Disabled",
+                Duration = 3,
+                Image = "power-off"
+            })
+        end
+    end
+})
+
+-- ┌────────────────────────────────────────────────────────────┐
+-- │ Destroy UI Button                                          │
+-- └────────────────────────────────────────────────────────────┘
+MiscTab:CreateButton({
+    Name = "Destroy / Close Hub",
+    Callback = function()
+        Rayfield:Notify({
+            Title = "Closing Hub",
+            Content = "HM HUB will now close...",
+            Duration = 2.5,
+            Image = "x-circle"
+        })
+        
+        task.wait(0.6)  -- small delay so user sees the message
+        Rayfield:Destroy()
+    end
+})
+
+-- Optional: small label/credits at bottom
+MiscTab:CreateLabel("HM HUB • by hollowBros • 2026")
