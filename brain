@@ -831,57 +831,54 @@ MiscTab:CreateButton({
     end
 })
 
+-- ┌────────────────────────────────────────────────────────────┐
+-- │ Godmode (Anti One-Shot + Regen)                            │
+-- └────────────────────────────────────────────────────────────┘
 local GodmodeEnabled = false
-local OldHealthConn, OldDiedConn
+local OldHealthConn
 
 MiscTab:CreateToggle({
-    Name = "Godmode (Anti One-Shot V2)",
+    Name = "Godmode (Anti One-Shot)",
     CurrentValue = false,
     Flag = "Misc_GodmodeV2",
     Callback = function(Value)
         GodmodeEnabled = Value
         
-        local char = player.Character
-        if not char then return end
-        
-        local hum = char:FindFirstChildOfClass("Humanoid")
+        local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
         if not hum then return end
         
         if Value then
-            -- Infinite health
-            hum.MaxHealth = math.huge
-            hum.Health = math.huge
-            
-            -- Regen every frame (catches rapid damage)
+            -- Force max health constantly
             spawn(function()
-                while GodmodeEnabled and hum.Parent do
+                while GodmodeEnabled do
                     hum.Health = hum.MaxHealth
-                    task.wait()
+                    task.wait(0.1)
                 end
             end)
             
-            -- Block Died event (prevents respawn trigger)
-            OldDiedConn = hum.Died:Connect(function()
-                if GodmodeEnabled then
+            -- Block death / one-shot
+            hum.MaxHealth = math.huge
+            hum.Health = math.huge
+            
+            -- Optional: prevent fall damage / kill bricks by disconnecting health change
+            OldHealthConn = hum.HealthChanged:Connect(function(health)
+                if health < hum.MaxHealth and GodmodeEnabled then
                     hum.Health = hum.MaxHealth
-                    hum:ChangeState(Enum.HumanoidStateType.GettingUp)  -- Cancel death
                 end
             end)
             
             Rayfield:Notify({
-                Title = "Godmode V2",
-                Content = "Enabled – should survive repeated one-shots",
+                Title = "Godmode",
+                Content = "Enabled – should survive one-shots & walls",
                 Duration = 4,
                 Image = "shield"
             })
         else
             if OldHealthConn then OldHealthConn:Disconnect() end
-            if OldDiedConn then OldDiedConn:Disconnect() end
-            
-            hum.MaxHealth = 100  -- Reset (change if game uses different default)
+            hum.MaxHealth = 100  -- Reset to normal (adjust if game uses different default)
             hum.Health = 100
             Rayfield:Notify({
-                Title = "Godmode V2",
+                Title = "Godmode",
                 Content = "Disabled",
                 Duration = 3,
                 Image = "shield-off"
@@ -890,33 +887,28 @@ MiscTab:CreateToggle({
     end
 })
 
-local GhostModeEnabled = false
-
+-- Bonus: Auto-Respawn at Safe Spot (if one-shot still kills)
 MiscTab:CreateToggle({
-    Name = "Ghost Mode (Ignore Kill Parts)",
+    Name = "Auto Respawn Safe",
     CurrentValue = false,
-    Flag = "Misc_GhostMode",
+    Flag = "Misc_AutoRespawn",
     Callback = function(Value)
-        GhostModeEnabled = Value
-        
         if Value then
             spawn(function()
-                while GhostModeEnabled do
-                    local char = player.Character
-                    if char then
-                        for _, part in pairs(char:GetDescendants()) do
-                            if part:IsA("BasePart") or part:IsA("MeshPart") then
-                                part.CanCollide = false
-                                part.CanTouch = false  -- Blocks touch events (kill bricks)
-                            end
-                        end
+                while Value do
+                    local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+                    if hum and hum.Health <= 0 then
+                        -- Wait for death, then respawn
+                        task.wait(0.5)
+                        player.Character = nil  -- Force respawn
+                        player.CharacterAdded:Wait()
+                        -- Optional: TP to spawn or last safe spot
+                        local root = player.Character:WaitForChild("HumanoidRootPart")
+                        root.CFrame = CFrame.new(0, 50, 0)  -- Change to your safe spot
                     end
                     task.wait(0.2)
                 end
             end)
-            Rayfield:Notify({Title = "Ghost Mode", Content = "Enabled – ignore most kill parts", Duration = 4, Image = "ghost"})
-        else
-            Rayfield:Notify({Title = "Ghost Mode", Content = "Disabled", Duration = 3, Image = "ban"})
         end
     end
 })
