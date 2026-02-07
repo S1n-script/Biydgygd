@@ -832,50 +832,56 @@ MiscTab:CreateButton({
 })
 
 local GodmodeEnabled = false
-local OldHealthConn
+local OldHealthConn, OldDiedConn
 
 MiscTab:CreateToggle({
-    Name = "Godmode (Anti One-Shot)",
+    Name = "Godmode (Anti One-Shot V2)",
     CurrentValue = false,
     Flag = "Misc_GodmodeV2",
     Callback = function(Value)
         GodmodeEnabled = Value
         
-        local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+        local char = player.Character
+        if not char then return end
+        
+        local hum = char:FindFirstChildOfClass("Humanoid")
         if not hum then return end
         
         if Value then
-            -- Force max health constantly
-            spawn(function()
-                while GodmodeEnabled do
-                    hum.Health = hum.MaxHealth
-                    task.wait(0.1)
-                end
-            end)
-            
-            -- Block death / one-shot
+            -- Infinite health
             hum.MaxHealth = math.huge
             hum.Health = math.huge
             
-            -- Optional: prevent fall damage / kill bricks by disconnecting health change
-            OldHealthConn = hum.HealthChanged:Connect(function(health)
-                if health < hum.MaxHealth and GodmodeEnabled then
+            -- Regen every frame (catches rapid damage)
+            spawn(function()
+                while GodmodeEnabled and hum.Parent do
                     hum.Health = hum.MaxHealth
+                    task.wait()
+                end
+            end)
+            
+            -- Block Died event (prevents respawn trigger)
+            OldDiedConn = hum.Died:Connect(function()
+                if GodmodeEnabled then
+                    hum.Health = hum.MaxHealth
+                    hum:ChangeState(Enum.HumanoidStateType.GettingUp)  -- Cancel death
                 end
             end)
             
             Rayfield:Notify({
-                Title = "Godmode",
-                Content = "Enabled – should survive one-shots & walls",
+                Title = "Godmode V2",
+                Content = "Enabled – should survive repeated one-shots",
                 Duration = 4,
                 Image = "shield"
             })
         else
             if OldHealthConn then OldHealthConn:Disconnect() end
-            hum.MaxHealth = 100  -- Reset to normal (adjust if game uses different default)
+            if OldDiedConn then OldDiedConn:Disconnect() end
+            
+            hum.MaxHealth = 100  -- Reset (change if game uses different default)
             hum.Health = 100
             Rayfield:Notify({
-                Title = "Godmode",
+                Title = "Godmode V2",
                 Content = "Disabled",
                 Duration = 3,
                 Image = "shield-off"
