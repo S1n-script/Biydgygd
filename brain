@@ -208,3 +208,221 @@ Tab:CreateToggle({
       end
    end,
 })
+
+local UpgSpeed = false  -- Local variable for toggle state
+
+local Toggle = Tab:CreateToggle({  -- Fixed: Tab:CreateToggle({ ... })
+   Name = "Auto Speed Upgrade (Levels 1-4)",
+   CurrentValue = false,
+   Flag = "SpeedUpgraderToggle",  -- Good unique flag
+   Callback = function(Value)
+      UpgSpeed = Value
+      
+      if Value then
+         Rayfield:Notify({
+            Title = "Auto Speed Upgrade",
+            Content = "Started upgrading speed levels (1–4)...",
+            Duration = 4,
+            Image = "play"  -- Lucide icon for start
+         })
+         
+         task.spawn(function()
+            while UpgSpeed do
+               local success, err = pcall(function()
+                  local speedLevels = {1, 2, 3, 4}  -- Numbers (correct)
+                  
+                  local remotesFolder = game:GetService("ReplicatedStorage")
+                     :WaitForChild("SharedModules", 8)   -- Timeout prevents hang
+                     :WaitForChild("Network", 5)
+                     :WaitForChild("Remotes", 5)
+                  
+                  if not remotesFolder then
+                     error("Remotes path not found")
+                  end
+                  
+                  local upgradeRemote = remotesFolder:FindFirstChild("Buy Speed Upgrade")
+                  if not upgradeRemote then
+                     error("Remote 'Buy Speed Upgrade' not found")
+                  end
+                  
+                  for _, level in ipairs(speedLevels) do
+                     if not UpgSpeed then break end  -- Stop early if toggled off
+                     upgradeRemote:FireServer(level)
+                     task.wait(0.5)  -- Your original delay
+                  end
+               end)
+               
+               if not success then
+                  warn("[Auto Speed Upgrade] Error: " .. tostring(err))
+                  Rayfield:Notify({
+                     Title = "Speed Upgrade Error",
+                     Content = "Failed: " .. tostring(err or "unknown issue"),
+                     Duration = 6,
+                     Image = "alert-triangle"
+                  })
+                  task.wait(5)  -- Cooldown on error to avoid spam
+               end
+               
+               task.wait(6)  -- Your original cycle pause – good anti-spam
+            end
+            
+            -- Notify only when actually stopping
+            Rayfield:Notify({
+               Title = "Auto Speed Upgrade",
+               Content = "Stopped.",
+               Duration = 2.5,
+               Image = "pause"
+            })
+         end)
+      else
+         -- Optional: quick feedback on turning off
+         Rayfield:Notify({
+            Title = "Auto Speed Upgrade",
+            Content = "Stopping...",
+            Duration = 2,
+            Image = "pause"
+         })
+      end
+   end,
+})
+
+local Carry = false  -- Define outside (script scope)
+
+local Toggle = Tab:CreateToggle({
+   Name = "Auto Carry Upgrade",
+   CurrentValue = false,
+   Flag = "AutoCarryToggle",  -- Good unique flag for saving
+   Callback = function(Value)
+      Carry = Value  -- ← Critical: Update the state variable FIRST
+      
+      if Value then
+         Rayfield:Notify({
+            Title = "Auto Carry Upgrade",
+            Content = "Started upgrading carry limit...",
+            Duration = 4,
+            Image = "play"
+         })
+         
+         task.spawn(function()
+            while Carry do
+               local success, err = pcall(function()
+                  local remotes = game:GetService("ReplicatedStorage")
+                     :WaitForChild("SharedModules", 8)
+                     :WaitForChild("Network", 5)
+                     :WaitForChild("Remotes", 5)
+                  
+                  if not remotes then
+                     error("Remotes path not found")
+                  end
+                  
+                  local upgradeRemote = remotes:FindFirstChild("Upgrade Carry Limit")
+                  if not upgradeRemote then
+                     error("Remote 'Upgrade Carry Limit' not found")
+                  end
+                  
+                  upgradeRemote:FireServer()
+                  -- No loop needed for args since it's parameterless
+               end)
+               
+               if not success then
+                  warn("[Auto Carry Upgrade] Error: " .. tostring(err))
+                  Rayfield:Notify({
+                     Title = "Carry Upgrade Error",
+                     Content = "Failed: " .. tostring(err or "unknown"),
+                     Duration = 6,
+                     Image = "alert-triangle"
+                  })
+                  task.wait(5)  -- Cooldown on error
+               end
+               
+               task.wait(0.5)  -- Your original delay – keeps it safe
+            end
+            
+            Rayfield:Notify({
+               Title = "Auto Carry Upgrade",
+               Content = "Stopped.",
+               Duration = 2.5,
+               Image = "pause"
+            })
+         end)
+      else
+         Rayfield:Notify({
+            Title = "Auto Carry Upgrade",
+            Content = "Stopping...",
+            Duration = 2,
+            Image = "pause"
+         })
+      end
+   end,
+})
+
+local Rebirth = false  -- Define outside (script scope)
+
+local Toggle = Tab:CreateToggle({
+   Name = "Auto Rebirth",
+   CurrentValue = false,
+   Flag = "AutoRebirthToggle",  -- Unique flag for config saving
+   Callback = function(Value)
+      Rebirth = Value  -- ← Critical: Update state variable FIRST
+      
+      if Value then
+         Rayfield:Notify({
+            Title = "Auto Rebirth",
+            Content = "Started auto-rebirthing...",
+            Duration = 4,
+            Image = "refresh-cw"  -- Lucide icon for rebirth/loop
+         })
+         
+         task.spawn(function()
+            while Rebirth do
+               local success, err = pcall(function()
+                  local remotes = game:GetService("ReplicatedStorage")
+                     :WaitForChild("SharedModules", 8)
+                     :WaitForChild("Network", 5)
+                     :WaitForChild("Remotes", 5)
+                  
+                  if not remotes then
+                     error("Remotes path not found")
+                  end
+                  
+                  local rebirthRemote = remotes:FindFirstChild("Rebirth")
+                  if not rebirthRemote then
+                     error("Remote 'Rebirth' not found")
+                  end
+                  
+                  rebirthRemote:FireServer()  -- Most rebirth remotes take no args
+               end)
+               
+               if not success then
+                  warn("[Auto Rebirth] Error: " .. tostring(err))
+                  Rayfield:Notify({
+                     Title = "Rebirth Error",
+                     Content = "Failed: " .. tostring(err or "unknown issue"),
+                     Duration = 7,
+                     Image = "alert-triangle"
+                  })
+                  task.wait(6)  -- Longer cooldown after error
+               end
+               
+               task.wait(1.2)  -- Reasonable delay between rebirths 
+                               -- Adjust higher (2–5s) if game has cooldown or anti-spam
+            end
+            
+            Rayfield:Notify({
+               Title = "Auto Rebirth",
+               Content = "Stopped.",
+               Duration = 2.5,
+               Image = "pause"
+            })
+         end)
+      else
+         Rayfield:Notify({
+            Title = "Auto Rebirth",
+            Content = "Stopping...",
+            Duration = 2,
+            Image = "pause"
+         })
+      end
+   end,
+})
+
