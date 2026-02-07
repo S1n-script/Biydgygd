@@ -890,6 +890,37 @@ MiscTab:CreateToggle({
     end
 })
 
+local GhostModeEnabled = false
+
+MiscTab:CreateToggle({
+    Name = "Ghost Mode (Ignore Kill Parts)",
+    CurrentValue = false,
+    Flag = "Misc_GhostMode",
+    Callback = function(Value)
+        GhostModeEnabled = Value
+        
+        if Value then
+            spawn(function()
+                while GhostModeEnabled do
+                    local char = player.Character
+                    if char then
+                        for _, part in pairs(char:GetDescendants()) do
+                            if part:IsA("BasePart") or part:IsA("MeshPart") then
+                                part.CanCollide = false
+                                part.CanTouch = false  -- Blocks touch events (kill bricks)
+                            end
+                        end
+                    end
+                    task.wait(0.2)
+                end
+            end)
+            Rayfield:Notify({Title = "Ghost Mode", Content = "Enabled – ignore most kill parts", Duration = 4, Image = "ghost"})
+        else
+            Rayfield:Notify({Title = "Ghost Mode", Content = "Disabled", Duration = 3, Image = "ban"})
+        end
+    end
+})
+
 -- Credits / info label at bottom
 MiscTab:CreateLabel("HM HUB • by hollowBros • 2026")
 MiscTab:CreateLabel("Misc tools & quality-of-life features")
