@@ -426,8 +426,6 @@ local Toggle = Tab:CreateToggle({
    end,
 })
 
-local Tab = Window:CreateTab("Steal Friend", 4483362458) -- Title, Image
-
 -- ──────────────────────────────────────────────────────────────
 -- Auto Steal (Proximity Prompts) - Walk Close + TP Steal
 -- ──────────────────────────────────────────────────────────────
@@ -436,10 +434,10 @@ local FriendsFolder = workspace:WaitForChild("Live", 10):WaitForChild("Friends",
 local player = game.Players.LocalPlayer
 
 -- Config
-local HOLD_BUFFER     = 0.28          -- safety after holdDuration
-local CHECK_INTERVAL  = 0.16          -- fast but not CPU heavy
-local DISTANCE_EXTRA  = 3.2           -- generous buffer
-local TP_OFFSET       = CFrame.new(0, 0, -2.2)  -- slightly in front
+local HOLD_BUFFER     = 0.28
+local CHECK_INTERVAL  = 0.16
+local DISTANCE_EXTRA  = 3.2
+local TP_OFFSET       = CFrame.new(0, 0, -2.2)
 
 getgenv().AutoStealOn = false
 
@@ -457,7 +455,6 @@ local function GetAllPrompts()
                     FriendName = friend.Name,
                     MaxDist   = prompt.MaxActivationDistance or 12
                 })
-                -- print("Loaded: " .. friend.Name .. " (dist " .. prompt.MaxActivationDistance .. ")")
             end
         end
     end
@@ -480,7 +477,6 @@ local function AttemptSteal(entry, force)
         return false
     end
 
-    -- Distance check unless forced (TP mode)
     if not force then
         local dist = (hrp.Position - entry.RootPart.Position).Magnitude
         if dist > entry.MaxDist + DISTANCE_EXTRA then
@@ -490,7 +486,6 @@ local function AttemptSteal(entry, force)
 
     print("Stealing → " .. entry.FriendName .. " (force: " .. tostring(force) .. ")")
 
-    -- Dynamic hold duration (most reliable method)
     local hold = prompt.HoldDuration or 0
     if hold > 0 then
         prompt:InputHoldBegin()
@@ -498,17 +493,16 @@ local function AttemptSteal(entry, force)
         prompt:InputHoldEnd()
     end
 
-    -- Multi-trigger shotgun (covers executor differences & game quirks)
     task.wait(0.07)
-    fireproximityprompt(prompt)                 -- 1. standard
+    fireproximityprompt(prompt)
     task.wait(0.06)
-    fireproximityprompt(prompt, 0)              -- 2. skip hold
+    fireproximityprompt(prompt, 0)
     task.wait(0.06)
-    fireproximityprompt(prompt, 1)              -- 3. respect hold
+    fireproximityprompt(prompt, 1)
     task.wait(0.07)
-    fireproximityprompt(prompt, 0, true)        -- 4. some games need this
+    fireproximityprompt(prompt, 0, true)
     task.wait(0.05)
-    fireproximityprompt(prompt)                 -- 5. extra standard
+    fireproximityprompt(prompt)
 
     return true
 end
@@ -579,11 +573,20 @@ Tab:CreateDropdown({
     CurrentOption = "Select Friend",
     Flag = "StealFriendDropdown",
     Callback = function(Value)
-        if Value == "Select Friend" then return end
+        -- Safety handling for possible table input
+        local selected = (type(Value) == "table" and Value[1]) or Value
+        if type(selected) ~= "string" then selected = "Select Friend" end
 
-        local targetObj = FriendsFolder:FindFirstChild(Value)
+        if selected == "Select Friend" or selected == "" then return end
+
+        local targetObj = FriendsFolder:FindFirstChild(selected)
         if not targetObj then
-            print("Target not found: " .. Value)
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "Friend not found: " .. selected,
+                Duration = 4,
+                Image = "alert-triangle"
+            })
             return
         end
 
@@ -596,7 +599,6 @@ Tab:CreateDropdown({
 
         if not targetCFrame then return end
 
-        -- Get character safely (handles respawn)
         local char = player.Character
         if not char or not char.Parent then
             char = player.CharacterAdded:Wait()
@@ -605,14 +607,12 @@ Tab:CreateDropdown({
 
         local originalCFrame = root.CFrame
 
-        -- TP with offset
         root.CFrame = targetCFrame * TP_OFFSET
-        task.wait(0.18)  -- Let physics settle
+        task.wait(0.18)
 
-        -- Find matching prompt entry
         local targetEntry
         for _, entry in ipairs(allPrompts) do
-            if entry.FriendName == Value then
+            if entry.FriendName == selected then
                 targetEntry = entry
                 break
             end
@@ -620,25 +620,24 @@ Tab:CreateDropdown({
 
         local success = false
         if targetEntry then
-            success = AttemptSteal(targetEntry, true)  -- force = ignore distance
-            task.wait(0.9)  -- Give time for animation / server sync
+            success = AttemptSteal(targetEntry, true)
+            task.wait(0.9)
         else
-            print("No StealPrompt found for: " .. Value .. " (refresh list?)")
+            print("No StealPrompt for: " .. selected)
         end
 
-        -- Return to original position
         root.CFrame = originalCFrame
 
         Rayfield:Notify({
             Title = "Steal Action",
-            Content = success and ("Stole from " .. Value .. " → returned") or ("Failed to steal from " .. Value),
+            Content = success and ("Stole from " .. selected .. " → returned") or ("Failed to steal from " .. selected),
             Duration = 5,
             Image = success and "check-circle" or "alert-triangle"
         })
     end
 })
 
-print("Auto Steal module loaded – toggle on + walk or use dropdown")
+print("Auto Steal module loaded")
 
 -- ──────────────────────────────────────────────────────────────
 -- Misc Tab / Section
