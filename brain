@@ -1,13 +1,57 @@
-local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/jensonhirst/Orion/main/source')))()
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
-local Window = OrionLib:MakeWindow({Name = "Escaspe Waves For Lucky Blocks", HidePremium = false, SaveConfig = true, ConfigFolder = "OrionTest"})
+local Window = Rayfield:CreateWindow({
+   Name = "HM HUB",
+   Icon = 0, -- Icon in Topbar. Can use Lucide Icons (string) or Roblox Image (number). 0 to use no icon (default).
+   LoadingTitle = "Hollow Moon Scripts",
+   LoadingSubtitle = "By hollowBros",
+   ShowText = "HM HUB", -- for mobile users to unhide rayfield, change if you'd like
+   Theme = "Default", -- Check https://docs.sirius.menu/rayfield/configuration/themes
 
-local Tab = Window:MakeTab({
-    Name = "TungTung",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
+   ToggleUIKeybind = "K", -- The keybind to toggle the UI visibility (string like "K" or Enum.KeyCode)
+
+   DisableRayfieldPrompts = false,
+   DisableBuildWarnings = false, -- Prevents Rayfield from warning when the script has a version mismatch with the interface
+
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = nil, -- Create a custom folder for your hub/game
+      FileName = "Big Hub"
+   },
+
+   Discord = {
+      Enabled = false, -- Prompt the user to join your Discord server if their executor supports it
+      Invite = "noinvitelink", -- The Discord invite code, do not include discord.gg/. E.g. discord.gg/ ABCD would be ABCD
+      RememberJoins = true -- Set this to false to make them join the discord every time they load it up
+   },
+
+   KeySystem = false, -- Set this to true to use our key system
+   KeySettings = {
+      Title = "Untitled",
+      Subtitle = "Key System",
+      Note = "No method of obtaining the key is provided", -- Use this to tell the user how to get a key
+      FileName = "Key", -- It is recommended to use something unique as other scripts using Rayfield may overwrite your key file
+      SaveKey = true, -- The user's key will be saved, but if you change the key, they will be unable to use your script
+      GrabKeyFromSite = false, -- If this is true, set Key below to the RAW site you would like Rayfield to get the key from
+      Key = {"Hello"} -- List of keys that will be accepted by the system, can be RAW file links (pastebin, github etc) or simple strings ("hello","key22")
+   }
 })
-Tab:AddLabel("                                          AUTO FEATURES         ")
+
+-- After Window creation
+
+local MainTab    = Window:CreateTab("Main",    "home")          -- Lucide icon
+local PlayerTab  = Window:CreateTab("Player",  "user")          -- or "person-standing"
+local GameTab    = Window:CreateTab("Game",    "gamepad-2")
+local VisualTab  = Window:CreateTab("Visuals", "eye")
+local SettingsTab = Window:CreateTab("Settings", "settings")
+
+-- Inside tabs, use sections for grouping
+local PlayerSection = PlayerTab:CreateSection("Character Mods")
+local SpeedSection  = PlayerTab:CreateSection("Movement")
+
+-- Optional visual separation
+MainTab:CreateDivider()   -- Or use :CreateParagraph() for headers/info
+
 local Collect = false
 
 Tab:AddToggle({
@@ -47,352 +91,5 @@ Tab:AddToggle({
                 end
             end)
         end
-    end
-})
-
-local UpgFriend = false
-
-Tab:AddToggle({
-    Name = "Auto Friend Upgrade (NB)",
-    Default = false,
-    Callback = function(Value)
-        UpgFriend = Value
-        
-        if UpgFriend then
-            task.spawn(function()
-                while UpgFriend do
-                    local friendIDs = {
-                        "1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
-                            "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
-                            "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
-                            "31", "32", "33", "34", "35", "36", "37", "38", "39", "40",
-                            "41", "42", "43", "44", "45", "46", "47", "48", "49", "50",
-                            "51", "52", "53", "54", "55", "56", "57", "58", "59", "60",
-                            "61", "62", "63", "64", "65", "66", "67", "68", "69", "70",
-                            "71", "72", "73", "74", "75", "76", "77", "78", "79", "80",
-                            "81", "82", "83", "84", "85", "86", "87", "88", "89", "90",
-                            "91", "92", "93", "94", "95", "96", "97", "98", "99", "100"                    }
-                    
-                    local remotesFolder = game:GetService("ReplicatedStorage")
-                        :WaitForChild("SharedModules")
-                        :WaitForChild("Network")
-                        :WaitForChild("Remotes")
-                    
-                    local upgradeRemote = remotesFolder:WaitForChild("Upgrade Friend")
-                    
-                    for _, id in ipairs(friendIDs) do
-                        upgradeRemote:FireServer(id)
-                        task.wait(0.3)
-                    end
-                    
-                    task.wait(2)  -- Pause after full cycle to avoid spam/kicks
-                end
-            end)
-        end
-    end
-})
-
-local UpgSpeed = false
-
-Tab:AddToggle({
-    Name = "Auto Speed Upgrade",
-    Default = false,
-    Callback = function(Value)
-        UpgSpeed = Value
-        
-        if UpgSpeed then
-            task.spawn(function()
-                while UpgSpeed do
-                    local speedLevels = {1, 2, 3, 4}  -- 1 to 4 as numbers (no quotes)
-                    
-                    local remotesFolder = game:GetService("ReplicatedStorage")
-                        :WaitForChild("SharedModules")
-                        :WaitForChild("Network")
-                        :WaitForChild("Remotes")
-                    
-                    local upgradeRemote = remotesFolder:WaitForChild("Buy Speed Upgrade")
-                    
-                    for _, level in ipairs(speedLevels) do
-                        upgradeRemote:FireServer(level)
-                        task.wait(0.5)
-                    end
-                    
-                    task.wait(6)  -- Pause after trying all 4 before next cycle
-                end
-            end)
-        end
-    end
-})
-
-local Carry = false
-
-Tab:AddToggle({
-    Name = "Auto Carry Upgrade",
-    Default = false,
-    Callback = function(Value)
-        Carry = Value -- Update based on toggle state
-
-        if Carry then
-            task.spawn(function()
-                while Carry do
-                    game:GetService("ReplicatedStorage"):WaitForChild("SharedModules"):WaitForChild("Network"):WaitForChild("Remotes"):WaitForChild("Upgrade Carry Limit"):FireServer()
-                    task.wait(0.5) -- Short delay to avoid overwhelming the server
-                end
-            end)
-        end
-    end
-})
-
-local Rebirth = false
-
-Tab:AddToggle({
-    Name = "Auto Rebirth",
-    Default = false,
-    Callback = function(Value)
-        Rebirth = Value -- Update based on toggle state
-
-        if Rebirth then
-            task.spawn(function()
-                while Rebirth do
-                    game:GetService("ReplicatedStorage"):WaitForChild("SharedModules"):WaitForChild("Network"):WaitForChild("Remotes"):WaitForChild("Rebirth"):FireServer()
-                    task.wait(0.5) -- Short delay to avoid overwhelming the server
-                end
-            end)
-        end
-    end
-})
-Tab:AddLabel("                                          STEAL FEATURES         ")
-local FriendsFolder = workspace:WaitForChild("Live"):WaitForChild("Friends")
-local player = game.Players.LocalPlayer
-
--- Config
-local HOLD_BUFFER = 0.25          -- extra safety buffer after hold
-local CHECK_INTERVAL = 0.18       -- slightly faster scan
-local DISTANCE_EXTRA = 3          -- generous buffer for activation
-
-getgenv().AutoStealOn = false
-
--- Find all valid StealPrompts
-local function GetAllPrompts()
-    local prompts = {}
-    for _, friend in pairs(FriendsFolder:GetChildren()) do
-        local root = friend:FindFirstChild("RootPart")
-        if root then
-            local prompt = root:FindFirstChild("StealPrompt")
-            if prompt and prompt:IsA("ProximityPrompt") then
-                table.insert(prompts, {
-                    Prompt = prompt,
-                    RootPart = root,
-                    FriendName = friend.Name,
-                    MaxDist = prompt.MaxActivationDistance or 12
-                })
-                print("Loaded prompt: " .. friend.Name .. " (max dist: " .. prompt.MaxActivationDistance .. ")")
-            end
-        end
-    end
-    print("Found " .. #prompts .. " StealPrompts")
-    return prompts
-end
-
-local allPrompts = GetAllPrompts()
-
--- Improved steal attempt (supports forced triggering)
-local function AttemptSteal(entry, force)
-    local character = player.Character
-    if not character then return false end
-    
-    local hrp = character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return false end
-    
-    local prompt = entry.Prompt
-    if not prompt or not prompt:IsDescendantOf(workspace) or not prompt.Enabled then
-        return false
-    end
-    
-    -- Distance check unless forcing (e.g. after teleport)
-    if not force then
-        local dist = (hrp.Position - entry.RootPart.Position).Magnitude
-        local maxAllowed = entry.MaxDist + DISTANCE_EXTRA
-        
-        if dist > maxAllowed then
-            return false
-        end
-    end
-    
-    print("Stealing → " .. entry.FriendName .. " (force: " .. tostring(force) .. ")")
-    
-    -- Use actual HoldDuration from the prompt (most reliable fix)
-    local holdDuration = prompt.HoldDuration or 0
-    
-    if holdDuration > 0 then
-        prompt:InputHoldBegin()
-        task.wait(holdDuration + HOLD_BUFFER)
-        prompt:InputHoldEnd()
-    end
-    
-    -- Multiple trigger styles (covers most anti-cheat bypasses / executor differences)
-    task.wait(0.06)
-    fireproximityprompt(prompt)                 -- Standard
-    task.wait(0.06)
-    fireproximityprompt(prompt, 0)              -- Skip hold
-    task.wait(0.06)
-    fireproximityprompt(prompt, 1)              -- Respect hold
-    task.wait(0.08)
-    fireproximityprompt(prompt, 0, true)        -- Some games need this variant
-    
-    return true
-end
-
--- Main auto-steal loop
-spawn(function()
-    while true do
-        task.wait(CHECK_INTERVAL)
-        
-        if not getgenv().AutoStealOn then
-            continue
-        end
-        
-        local stolen = 0
-        for _, entry in ipairs(allPrompts) do
-            if AttemptSteal(entry, false) then
-                stolen = stolen + 1
-            end
-        end
-        
-        if stolen > 0 then
-            print("Stole from " .. stolen .. " friends this cycle")
-        end
-    end
-end)
-
--- UI Controls
-Tab:AddToggle({
-    Name = "Auto Steal (Walk Close Only)",
-    Default = false,
-    Callback = function(enabled)
-        getgenv().AutoStealOn = enabled
-        print("Auto Steal " .. (enabled and "ENABLED – get close to friends!" or "DISABLED"))
-    end
-})
-
-Tab:AddButton({
-    Name = "Refresh Prompt List",
-    Callback = function()
-        allPrompts = GetAllPrompts()
-        print("Prompt list refreshed!")
-    end
-})
-
--- Dynamically get valid friend names
-local options = {"Select Friend"}  -- Prevents auto-TP
-for _, obj in pairs(FriendsFolder:GetChildren()) do
-    if obj:IsA("BasePart") or (obj:IsA("Model") and obj.PrimaryPart) then
-        table.insert(options, obj.Name)
-    end
-end
-table.sort(options)
-
-Tab:AddDropdown({
-    Name = "Steal Friend",
-    Default = "Select Friend",
-    Options = options,
-    Callback = function(Value)
-        if Value == "Select Friend" then
-            print("No action – select a real friend!")
-            return
-        end
-        
-        local targetObj = FriendsFolder:FindFirstChild(Value)
-        if not targetObj then
-            print("Friend not found: " .. Value)
-            return
-        end
-        
-        local targetCFrame
-        if targetObj:IsA("BasePart") then
-            targetCFrame = targetObj.CFrame
-        elseif targetObj:IsA("Model") and targetObj.PrimaryPart then
-            targetCFrame = targetObj.PrimaryPart.CFrame
-        end
-        
-        if not targetCFrame then return end
-        
-        local character = player.Character or player.CharacterAdded:Wait()
-        local root = character:WaitForChild("HumanoidRootPart")
-        
-        local originalCFrame = root.CFrame  -- Save position
-        
-        root.CFrame = targetCFrame * CFrame.new(0, 0, -2)  -- Slight offset for prompt
-        
-        task.wait(0.15)  -- Let TP settle
-        
-        -- Attempt steal with force
-        local targetEntry
-        for _, entry in ipairs(allPrompts) do
-            if entry.FriendName == Value then
-                targetEntry = entry
-                break
-            end
-        end
-        
-        if targetEntry then
-            AttemptSteal(targetEntry, true)
-            task.wait(0.8)  -- Give time for steal animation/server
-        else
-            print("No StealPrompt found for: " .. Value)
-        end
-        
-        root.CFrame = originalCFrame  -- Return
-        print("Returned after stealing " .. Value)
-    end
-})
-
-print("Refined Auto Steal loaded – toggle on, walk near friends, and it should trigger reliably.")
-Tab:AddLabel("                                          MISC FEATURES         ")-- NoClip Toggle
-local NoClip = false
-local function toggleNoClip(state)
-    NoClip = state
-    
-    if not NoClip then
-        -- Turn off: restore collision
-        local char = game.Players.LocalPlayer.Character
-        if char then
-            for _, part in pairs(char:GetDescendants()) do
-                if part:IsA("BasePart") or part:IsA("MeshPart") then
-                    part.CanCollide = true
-                end
-            end
-        end
-        return
-    end
-    
-    -- NoClip ON → main loop
-    task.spawn(function()
-        while NoClip do
-            local char = game.Players.LocalPlayer.Character
-            if not char then
-                task.wait(0.4)
-                continue
-            end
-            
-            for _, part in pairs(char:GetDescendants()) do
-                if part:IsA("BasePart") or part:IsA("MeshPart") then
-                    if part.CanCollide ~= false then
-                        part.CanCollide = false
-                    end
-                end
-            end
-            
-            task.wait(0.25) -- refresh rate (lower = smoother but more cpu)
-        end
-    end)
-end
-
-Tab:AddToggle({
-    Name = "NoClip (FREE VIP ZONE)",
-    Default = false,
-    Callback = function(Value)
-        toggleNoClip(Value)
-        print("NoClip " .. (Value and "ENABLED" or "DISABLED"))
     end
 })
