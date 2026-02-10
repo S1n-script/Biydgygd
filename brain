@@ -87,3 +87,60 @@ local Toggle = Tab:CreateToggle({
         end
     end,
 })
+
+local autoStat = false
+
+local Toggle = Tab:CreateToggle({  -- Changed to Toggle (like your other "Auto" features)
+    Name = "Auto Stats",
+    CurrentValue = false,
+    Flag = "AutoStatToggle",
+    
+    Callback = function(Value)
+        autoStat = Value
+        
+        if Value then
+            -- Optional notify
+            -- Rayfield:Notify({Title = "Auto Stats", Content = "Upgrading Energy/Gems/Luck/Damage...", Duration = 4})
+            
+            task.spawn(function()
+                local remote = game:GetService("ReplicatedStorage")
+                    :WaitForChild("Packages")
+                    :WaitForChild("_Index")
+                    :WaitForChild("sleitnick_knit@1.5.1")
+                    :WaitForChild("knit")
+                    :WaitForChild("Services")
+                    :WaitForChild("LevelService")
+                    :WaitForChild("RF")
+                    :WaitForChild("PutStat")
+                
+                local stats = {  -- All your stats in a table (easy to add more)
+                    {"Energy", 1},
+                    {"Gems", 1},
+                    {"Luck", 1},
+                    {"Damage", 1}
+                }
+                
+                while autoStat do
+                    local success, err = pcall(function()
+                        for _, statData in ipairs(stats) do
+                            if not autoStat then break end  -- Stop mid-cycle if toggled off
+                            
+                            local args = {statData[1], statData[2]}
+                            remote:InvokeServer(unpack(args))
+                            
+                            task.wait(0.15)  -- Delay between each stat upgrade
+                        end
+                    end)
+                    
+                    if not success then
+                        warn("Auto Stats error: " .. tostring(err))
+                        -- autoStat = false  -- Uncomment to auto-stop on error
+                    end
+                    
+                    task.wait(1.2)  -- Delay between full cycles (all 4 stats)
+                end
+            end)
+        end
+        -- Stops automatically when Value = false (loop checks autoStat)
+    end,
+})
