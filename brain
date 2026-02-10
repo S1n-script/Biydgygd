@@ -1,41 +1,68 @@
 -- Load Rayfield (working link as of 2026)
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- Stat Popup Killer Hook (add RIGHT AFTER local Rayfield = ...)
+-- Improved Stat + Daily Popup Killer Hook with Debug
 local mt = getrawmetatable(game)
 local oldNamecall = mt.__namecall
-setreadonly(mt, false)
+
+local success, err = pcall(function()
+    setreadonly(mt, false)
+end)
+
+if not success then
+    warn("[HOOK DEBUG] setreadonly failed: " .. tostring(err))
+    -- Fallback: some executors don't need/want setreadonly
+end
 
 mt.__namecall = function(self, ...)
     local method = getnamecallmethod()
-    local name = tostring(self)
+    local instanceName = tostring(self)  -- Full path like "ReplicatedStorage.Packages._Index.sleitnick_knit@1.5.1.knit.Services.LevelService.RF.PutStat"
+    local args = {...}
     
-    -- DAILIES: Fake success on "already claimed"
-    if name:find("ClaimReward") and method == "InvokeServer" then
-        local result = oldNamecall(self, ...)
-        if typeof(result) == "string" and (result:lower():find("claim") or result:lower():find("already")) then
-            return true
-        end
-        return result
+    -- Debug print EVERY InvokeServer call (remove after testing)
+    if method == "InvokeServer" then
+        print("[NAMECALL DEBUG] Remote:", instanceName, "Method:", method, "Args:", unpack(args))
     end
     
-    -- STATS: Fake success on "not enough" / max level
-    if name:find("PutStat") and method == "InvokeServer" then
-        local result = oldNamecall(self, ...)
-        if typeof(result) == "string" and (
-            result:lower():find("enough") or result:lower():find("insufficient") or 
-            result:lower():find("max") or result:lower():find("can't")
+    local originalResult = oldNamecall(self, ...)
+    
+    -- DAILIES: Suppress "already claimed" etc.
+    if instanceName:find("ClaimReward") and method == "InvokeServer" then
+        if typeof(originalResult) == "string" and (
+            originalResult:lower():find("already") or 
+            originalResult:lower():find("claim") or 
+            originalResult:lower():find("claimed") or 
+            originalResult:lower():find("unavailable")
         ) then
-            return true  -- Pretend it worked
+            print("[HOOK] Blocked daily popup:", originalResult)
+            return true  -- Fake success
         end
-        return result
     end
     
-    return oldNamecall(self, ...)
+    -- STATS: Suppress "not enough", "max", etc.
+    if instanceName:find("PutStat") and method == "InvokeServer" then
+        if typeof(originalResult) == "string" and (
+            originalResult:lower():find("enough") or 
+            originalResult:lower():find("insufficient") or 
+            originalResult:lower():find("max") or 
+            originalResult:lower():find("can't") or 
+            originalResult:lower():find("level") or 
+            originalResult:lower():find("upgrade")
+        ) then
+            print("[HOOK] Blocked stat popup:", originalResult)
+            return true  -- Fake success
+        end
+    end
+    
+    return originalResult
 end
 
-setreadonly(mt, true)
+-- Restore readonly if possible
+pcall(function()
+    setreadonly(mt, true)
+end)
 
+print("[HM HUB] Popup hook loaded with debug prints")
 -- Create the main window
 local Window = Rayfield:CreateWindow({
     Name = "HM Hub",
