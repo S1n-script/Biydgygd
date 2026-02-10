@@ -89,9 +89,29 @@ local Toggle = Tab:CreateToggle({
 })
 
 local autoStat = false
+local selectedStat = "Energy"  -- Default stat
 
-local Toggle = Tab:CreateToggle({  -- Changed to Toggle (like your other "Auto" features)
-    Name = "Auto Stats",
+-- Dropdown to select which stat to auto-upgrade
+local Dropdown = Tab:CreateDropdown({
+    Name = "Select Stat",
+    Options = {"Energy", "Gems", "Luck", "Damage"},
+    CurrentOption = {"Energy"},  -- Rayfield dropdown format: table with 1 item
+    Flag = "SelectedStatFlag",
+    
+    Callback = function(Option)
+        selectedStat = Option[1]  -- Rayfield passes {selected} as table
+        Rayfield:Notify({
+            Title = "Stat Selected",
+            Content = "Will auto-upgrade: " .. selectedStat,
+            Duration = 3,
+            Image = "rbxassetid://4483345998"  -- Checkmark icon
+        })
+    end,
+})
+
+-- Toggle to start/stop auto-upgrading the SELECTED stat
+local Toggle = Tab:CreateToggle({
+    Name = "Auto Upgrade Selected Stat",
     CurrentValue = false,
     Flag = "AutoStatToggle",
     
@@ -99,8 +119,23 @@ local Toggle = Tab:CreateToggle({  -- Changed to Toggle (like your other "Auto" 
         autoStat = Value
         
         if Value then
-            -- Optional notify
-            -- Rayfield:Notify({Title = "Auto Stats", Content = "Upgrading Energy/Gems/Luck/Damage...", Duration = 4})
+            if not selectedStat then
+                Rayfield:Notify({
+                    Title = "Error",
+                    Content = "Select a stat first!",
+                    Duration = 4,
+                    Image = "rbxassetid://4483362458"  -- Warning icon
+                })
+                autoStat = false
+                return
+            end
+            
+            Rayfield:Notify({
+                Title = "Auto Stats",
+                Content = "Upgrading " .. selectedStat .. " endlessly...",
+                Duration = 4,
+                Image = "rbxassetid://4483345998"
+            })
             
             task.spawn(function()
                 local remote = game:GetService("ReplicatedStorage")
@@ -113,34 +148,19 @@ local Toggle = Tab:CreateToggle({  -- Changed to Toggle (like your other "Auto" 
                     :WaitForChild("RF")
                     :WaitForChild("PutStat")
                 
-                local stats = {  -- All your stats in a table (easy to add more)
-                    {"Energy", 1},
-                    {"Gems", 1},
-                    {"Luck", 1},
-                    {"Damage", 1}
-                }
-                
                 while autoStat do
                     local success, err = pcall(function()
-                        for _, statData in ipairs(stats) do
-                            if not autoStat then break end  -- Stop mid-cycle if toggled off
-                            
-                            local args = {statData[1], statData[2]}
-                            remote:InvokeServer(unpack(args))
-                            
-                            task.wait(0.15)  -- Delay between each stat upgrade
-                        end
+                        local args = {selectedStat, 1}  -- Uses selected stat!
+                        remote:InvokeServer(unpack(args))
                     end)
                     
                     if not success then
-                        warn("Auto Stats error: " .. tostring(err))
-                        -- autoStat = false  -- Uncomment to auto-stop on error
+                        warn("Auto Stat error (" .. selectedStat .. "): " .. tostring(err))
                     end
                     
-                    task.wait(1.2)  -- Delay between full cycles (all 4 stats)
+                    task.wait(0.25)  -- Delay between upgrades (safe rate)
                 end
             end)
         end
-        -- Stops automatically when Value = false (loop checks autoStat)
     end,
 })
