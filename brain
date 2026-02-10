@@ -140,49 +140,6 @@ print("Tha Boo Hub loaded – no auto collect included")
 
 local dailyReward = false
 
-local Toggle = Tab:CreateToggle({
-   Name = "Claim Daily",
-   CurrentValue = false,
-   Flag = "DailyRewardToggle", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
-   Callback = function(Value)
-      if value then
-
-         task.spawn(function()
-         
-         while dailyReward do
-            local args = {
-	2
-}
-game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.5.1"):WaitForChild("knit"):WaitForChild("Services"):WaitForChild("GiftService"):WaitForChild("RF"):WaitForChild("ClaimReward"):InvokeServer(unpack(args))
-
-local args = {
-	1
-}
-game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.5.1"):WaitForChild("knit"):WaitForChild("Services"):WaitForChild("GiftService"):WaitForChild("RF"):WaitForChild("ClaimReward"):InvokeServer(unpack(args))
-
-local args = {
-	9
-}
-game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.5.1"):WaitForChild("knit"):WaitForChild("Services"):WaitForChild("GiftService"):WaitForChild("RF"):WaitForChild("ClaimReward"):InvokeServer(unpack(args))
-
-local args = {
-	8
-}
-game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.5.1"):WaitForChild("knit"):WaitForChild("Services"):WaitForChild("GiftService"):WaitForChild("RF"):WaitForChild("ClaimReward"):InvokeServer(unpack(args))
-
-local args = {
-	7
-}
-game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.5.1"):WaitForChild("knit"):WaitForChild("Services"):WaitForChild("GiftService"):WaitForChild("RF"):WaitForChild("ClaimReward"):InvokeServer(unpack(args))
-
-         end)
-         
-      end
-   end,
-})
-
-local dailyReward = false
-
 local Toggle = MainTab:CreateToggle({  -- Use 'MainTab' from your full script
     Name = "Auto Claim Daily Rewards (1-9)",
     CurrentValue = false,
@@ -231,3 +188,4 @@ local Toggle = MainTab:CreateToggle({  -- Use 'MainTab' from your full script
         end
     end,
 })
+
