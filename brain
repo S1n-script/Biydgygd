@@ -188,4 +188,3 @@ local Toggle = MainTab:CreateToggle({  -- Use 'MainTab' from your full script
         end
     end,
 })
-
