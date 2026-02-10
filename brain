@@ -37,83 +37,53 @@ local Window = Rayfield:CreateWindow({
    }
 })
 
-local Tab = Window:CreateTab("Auto Features", 4483362458) -- Title, Image
+local Tab = Window:CreateTab("testing", 4483362458) -- Title, Image
 
-local autoCollect = false
+local autoClick = false  -- Use a consistent variable name (lowercase 'c' to match usage)
 
-Tab:CreateToggle({
-    Name = "(Collect Earnings)",
+local Toggle = Tab:CreateToggle({
+    Name = "Auto Clicker",
     CurrentValue = false,
-    Flag = "AutoCollectToggle",
+    Flag = "AutoClickToggle",  -- Unique flag for saving config
+    
     Callback = function(Value)
-        autoCollect = Value
+        autoClick = Value  -- 'Value' is what Rayfield passes (true/false)
         
         if Value then
-            Rayfield:Notify({
-                Title = "Auto Collect",
-                Content = "Started collecting earnings (IDs 1–50)...",
-                Duration = 4,
-                Image = "play"
-            })
+            -- Optional: Notify when turned ON
+            -- Rayfield:Notify({Title = "Auto Clicker", Content = "Enabled!", Duration = 3})
             
-            task.spawn(function()
-                while autoCollect do
+            task.spawn(function()  -- Run the loop in a separate thread
+                while autoClick do
+                    -- Safe invoke (use pcall to avoid script breaking on errors)
                     local success, err = pcall(function()
-                        -- List of plot/tycoon IDs you want to collect from
-                        local collectIDs = {
-                            "1","2","3","4","5","6","7","8","9","10",
-                            "11","12","13","14","15","16","17","18","19","20",
-                            "21","22","23","24","25","26","27","28","29","30",
-                            "31","32","33","34","35","36","37","38","39","40",
-                            "41","42","43","44","45","46","47","48","49","50",
-                        }
-
-                        -- Most common remote format for tycoon/ plot games:
-                        -- Remote: RF/Plot.PlotAction or similar RemoteFunction
-                        local remote = game:GetService("ReplicatedStorage")
+                        local clickRemote = game:GetService("ReplicatedStorage")
                             :WaitForChild("Packages")
-                            :WaitForChild("Net")
-                            :WaitForChild("RF/Plot.PlotAction")
-
-                        for _, id in ipairs(collectIDs) do
-                            if not autoCollect then break end  -- stop faster when toggled off
-
-                            local args = {
-                                "Collect Money",                     -- action name
-                                "{0da2e0d8-522a-4907-8aba-3d0325671b85}", -- probably plot GUID / owner key
-                                id                                   -- plot number / dropper id
-                            }
-
-                            local ok, result = pcall(function()
-                                return remote:InvokeServer(unpack(args))
-                            end)
-
-                            if not ok then
-                                warn("Collect failed for ID " .. id .. ": " .. tostring(result))
-                            end
-
-                            task.wait(0.08)  -- ← very important: prevents kick / rate-limit / error spam
-                        end
+                            :WaitForChild("_Index")
+                            :WaitForChild("sleitnick_knit@1.5.1")
+                            :WaitForChild("knit")
+                            :WaitForChild("Services")
+                            :WaitForChild("ClickService")
+                            :WaitForChild("RF")
+                            :WaitForChild("Click")
+                        
+                        clickRemote:InvokeServer()  -- No arguments needed in most clicker games
                     end)
-
+                    
                     if not success then
-                        warn("Auto-collect loop error: " .. tostring(err))
+                        warn("Click failed: " .. tostring(err))
+                        -- Optional: break or disable if remote is missing
+                        -- autoClick = false
                     end
-
-                    task.wait(0.4)  -- delay between full cycles (adjust 0.2–1 sec)
-                end
-                
-                -- Optional: notify when stopped
-                if not autoCollect then
-                    Rayfield:Notify({
-                        Title = "Auto Collect",
-                        Content = "Stopped collecting.",
-                        Duration = 3,
-                        Image = "pause"
-                    })
+                    
+                    task.wait(0.03)  -- Very fast but safe rate (~33 clicks/sec)
+                    -- Use 0.08–0.15 if you get kicked / "too many requests"
                 end
             end)
+            
+        else
+            -- Optional: Notify when turned OFF
+            -- Rayfield:Notify({Title = "Auto Clicker", Content = "Disabled.", Duration = 3})
         end
     end,
 })
-
