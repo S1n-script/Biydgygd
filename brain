@@ -1,68 +1,6 @@
 -- Load Rayfield (working link as of 2026)
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- Improved Stat + Daily Popup Killer Hook with Debug
-local mt = getrawmetatable(game)
-local oldNamecall = mt.__namecall
-
-local success, err = pcall(function()
-    setreadonly(mt, false)
-end)
-
-if not success then
-    warn("[HOOK DEBUG] setreadonly failed: " .. tostring(err))
-    -- Fallback: some executors don't need/want setreadonly
-end
-
-mt.__namecall = function(self, ...)
-    local method = getnamecallmethod()
-    local instanceName = tostring(self)  -- Full path like "ReplicatedStorage.Packages._Index.sleitnick_knit@1.5.1.knit.Services.LevelService.RF.PutStat"
-    local args = {...}
-    
-    -- Debug print EVERY InvokeServer call (remove after testing)
-    if method == "InvokeServer" then
-        print("[NAMECALL DEBUG] Remote:", instanceName, "Method:", method, "Args:", unpack(args))
-    end
-    
-    local originalResult = oldNamecall(self, ...)
-    
-    -- DAILIES: Suppress "already claimed" etc.
-    if instanceName:find("ClaimReward") and method == "InvokeServer" then
-        if typeof(originalResult) == "string" and (
-            originalResult:lower():find("already") or 
-            originalResult:lower():find("claim") or 
-            originalResult:lower():find("claimed") or 
-            originalResult:lower():find("unavailable")
-        ) then
-            print("[HOOK] Blocked daily popup:", originalResult)
-            return true  -- Fake success
-        end
-    end
-    
-    -- STATS: Suppress "not enough", "max", etc.
-    if instanceName:find("PutStat") and method == "InvokeServer" then
-        if typeof(originalResult) == "string" and (
-            originalResult:lower():find("enough") or 
-            originalResult:lower():find("insufficient") or 
-            originalResult:lower():find("max") or 
-            originalResult:lower():find("can't") or 
-            originalResult:lower():find("level") or 
-            originalResult:lower():find("upgrade")
-        ) then
-            print("[HOOK] Blocked stat popup:", originalResult)
-            return true  -- Fake success
-        end
-    end
-    
-    return originalResult
-end
-
--- Restore readonly if possible
-pcall(function()
-    setreadonly(mt, true)
-end)
-
-print("[HM HUB] Popup hook loaded with debug prints")
 -- Create the main window
 local Window = Rayfield:CreateWindow({
     Name = "HM Hub",
@@ -118,7 +56,7 @@ local ClickToggle = MainTab:CreateToggle({
                         clickRemote:InvokeServer()
                     end)
                     
-                    task.wait(0.03)  -- Increase to 0.1 if you get kicked
+                    task.wait(0.1)  -- Increase to 0.1 if you get kicked
                 end
             end)
         end
@@ -183,7 +121,7 @@ local StatToggle = MainTab:CreateToggle({
                         remote:InvokeServer(selectedStat, 1)
                     end)
                     
-                    task.wait(0.25)  -- Safe delay – make it 0.4+ if kicked
+                    task.wait(30)  -- Safe delay – make it 0.4+ if kicked
                 end
             end)
         end
@@ -192,7 +130,7 @@ local StatToggle = MainTab:CreateToggle({
 
 -- Loaded notification
 Rayfield:Notify({
-    Title = "Tha Boo Hub Loaded!",
+    Title = "HM Hub Loaded!",
     Content = "Auto Clicker + Auto Stats ready. Select stat & toggle on!",
     Duration = 5,
     Image = "smile"
@@ -244,10 +182,62 @@ local Toggle = MainTab:CreateToggle({  -- Use 'MainTab' from your full script
                         warn("Daily claim error: " .. tostring(err))
                     end
                     
-                    task.wait(3)  -- Delay between full cycles (1-9) – prevents kick
+                    task.wait(60)  -- Delay between full cycles (1-9) – prevents kick
                 end
             end)
         end
     end,
 })
 
+local autoRankup = false
+
+local Toggle = MainTab:CreateToggle({  -- Assuming you're using MainTab from your HM HUB script
+    Name = "Auto Rank Up",
+    CurrentValue = false,
+    Flag = "AutoRankUpToggle",
+    
+    Callback = function(Value)
+        autoRankup = Value
+        
+        if Value then
+            Rayfield:Notify({
+                Title = "Auto Rank Up",
+                Content = "Attempting rank ups every ~0.5s...",
+                Duration = 4
+            })
+            
+            task.spawn(function()
+                local remote = game:GetService("ReplicatedStorage")
+                    :WaitForChild("Packages")
+                    :WaitForChild("_Index")
+                    :WaitForChild("sleitnick_knit@1.5.1")
+                    :WaitForChild("knit")
+                    :WaitForChild("Services")
+                    :WaitForChild("RankupService")
+                    :WaitForChild("RF")
+                    :WaitForChild("RankUp")
+                
+                while autoRankup do
+                    local success, err = pcall(function()
+                        remote:InvokeServer()  -- No args needed in most cases
+                    end)
+                    
+                    if not success then
+                        warn("RankUp failed: " .. tostring(err))
+                        -- Optional: auto-disable on repeated failure
+                        -- autoRankup = false
+                    end
+                    
+                    task.wait(60)  -- Safe delay – increase to 1 if kicked / rate-limited
+                end
+                
+                -- Optional: notify when stopped
+                Rayfield:Notify({
+                    Title = "Auto Rank Up",
+                    Content = "Stopped.",
+                    Duration = 3
+                })
+            end)
+        end
+    end,
+})
