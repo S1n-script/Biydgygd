@@ -1,62 +1,48 @@
+-- Load Rayfield (working link as of 2026)
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
+-- Create the main window
 local Window = Rayfield:CreateWindow({
-   Name = "HM HUB",
-   Icon = 0, -- Icon in Topbar. Can use Lucide Icons (string) or Roblox Image (number). 0 to use no icon (default).
-   LoadingTitle = "Hollow Moon Scripts",
-   LoadingSubtitle = "By The Hollows",
-   ShowText = "HM HUB", -- for mobile users to unhide rayfield, change if you'd like
-   Theme = "Default", -- Check https://docs.sirius.menu/rayfield/configuration/themes
-
-   ToggleUIKeybind = "K", -- The keybind to toggle the UI visibility (string like "K" or Enum.KeyCode)
-
-   DisableRayfieldPrompts = false,
-   DisableBuildWarnings = false, -- Prevents Rayfield from warning when the script has a version mismatch with the interface
-
-   ConfigurationSaving = {
-      Enabled = true,
-      FolderName = nil, -- Create a custom folder for your hub/game
-      FileName = "Big Hub"
-   },
-
-   Discord = {
-      Enabled = false, -- Prompt the user to join your Discord server if their executor supports it
-      Invite = "noinvitelink", -- The Discord invite code, do not include discord.gg/. E.g. discord.gg/ ABCD would be ABCD
-      RememberJoins = true -- Set this to false to make them join the discord every time they load it up
-   },
-
-   KeySystem = false, -- Set this to true to use our key system
-   KeySettings = {
-      Title = "Untitled",
-      Subtitle = "Key System",
-      Note = "No method of obtaining the key is provided", -- Use this to tell the user how to get a key
-      FileName = "Key", -- It is recommended to use something unique as other scripts using Rayfield may overwrite your key file
-      SaveKey = true, -- The user's key will be saved, but if you change the key, they will be unable to use your script
-      GrabKeyFromSite = false, -- If this is true, set Key below to the RAW site you would like Rayfield to get the key from
-      Key = {"Hello"} -- List of keys that will be accepted by the system, can be RAW file links (pastebin, github etc) or simple strings ("hello","key22")
-   }
+    Name = "HM Hub",
+    LoadingTitle = "Loading HM HUB...",
+    LoadingSubtitle = "by Tha Hollows",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "HMhub",
+        FileName = "Config"
+    },
+    KeySystem = false,
 })
 
-local Tab = Window:CreateTab("testing", 4483362458) -- Title, Image
+-- Main tab
+local MainTab = Window:CreateTab("Main", 4483362458)
 
-local autoClick = false  -- Use a consistent variable name (lowercase 'c' to match usage)
+-- Variables
+local autoClick = false
+local autoStat = false
+local selectedStat = "Energy"  -- Default
 
-local Toggle = Tab:CreateToggle({
+-- =====================================
+-- AUTO CLICKER
+-- =====================================
+local ClickToggle = MainTab:CreateToggle({
     Name = "Auto Clicker",
     CurrentValue = false,
-    Flag = "AutoClickToggle",  -- Unique flag for saving config
+    Flag = "AutoClickToggle",
     
     Callback = function(Value)
-        autoClick = Value  -- 'Value' is what Rayfield passes (true/false)
+        autoClick = Value
         
         if Value then
-            -- Optional: Notify when turned ON
-            -- Rayfield:Notify({Title = "Auto Clicker", Content = "Enabled!", Duration = 3})
+            Rayfield:Notify({
+                Title = "Auto Clicker",
+                Content = "Clicking every ~0.03s...",
+                Duration = 3
+            })
             
-            task.spawn(function()  -- Run the loop in a separate thread
+            task.spawn(function()
                 while autoClick do
-                    -- Safe invoke (use pcall to avoid script breaking on errors)
-                    local success, err = pcall(function()
+                    pcall(function()
                         local clickRemote = game:GetService("ReplicatedStorage")
                             :WaitForChild("Packages")
                             :WaitForChild("_Index")
@@ -67,50 +53,38 @@ local Toggle = Tab:CreateToggle({
                             :WaitForChild("RF")
                             :WaitForChild("Click")
                         
-                        clickRemote:InvokeServer()  -- No arguments needed in most clicker games
+                        clickRemote:InvokeServer()
                     end)
                     
-                    if not success then
-                        warn("Click failed: " .. tostring(err))
-                        -- Optional: break or disable if remote is missing
-                        -- autoClick = false
-                    end
-                    
-                    task.wait(0.03)  -- Very fast but safe rate (~33 clicks/sec)
-                    -- Use 0.08–0.15 if you get kicked / "too many requests"
+                    task.wait(0.03)  -- Increase to 0.1 if you get kicked
                 end
             end)
-            
-        else
-            -- Optional: Notify when turned OFF
-            -- Rayfield:Notify({Title = "Auto Clicker", Content = "Disabled.", Duration = 3})
         end
     end,
 })
 
-local autoStat = false
-local selectedStat = "Energy"  -- Default stat
-
--- Dropdown to select which stat to auto-upgrade
-local Dropdown = Tab:CreateDropdown({
-    Name = "Select Stat",
-    Options = {"Energy", "Gems", "Luck", "Damage"},
-    CurrentOption = {"Energy"},  -- Rayfield dropdown format: table with 1 item
+-- =====================================
+-- AUTO STATS (with Dropdown)
+-- =====================================
+-- Dropdown to choose stat
+local StatDropdown = MainTab:CreateDropdown({
+    Name = "Select Stat to Auto-Upgrade",
+    Options = {"Energy", "Gems", "Luck", "Damage"},  -- Add more if needed
+    CurrentOption = {"Energy"},
     Flag = "SelectedStatFlag",
     
     Callback = function(Option)
-        selectedStat = Option[1]  -- Rayfield passes {selected} as table
+        selectedStat = Option[1]
         Rayfield:Notify({
-            Title = "Stat Selected",
-            Content = "Will auto-upgrade: " .. selectedStat,
-            Duration = 3,
-            Image = "rbxassetid://4483345998"  -- Checkmark icon
+            Title = "Stat Updated",
+            Content = "Now auto-upgrading: " .. selectedStat,
+            Duration = 3
         })
     end,
 })
 
--- Toggle to start/stop auto-upgrading the SELECTED stat
-local Toggle = Tab:CreateToggle({
+-- Toggle to start auto-upgrade
+local StatToggle = MainTab:CreateToggle({
     Name = "Auto Upgrade Selected Stat",
     CurrentValue = false,
     Flag = "AutoStatToggle",
@@ -120,21 +94,15 @@ local Toggle = Tab:CreateToggle({
         
         if Value then
             if not selectedStat then
-                Rayfield:Notify({
-                    Title = "Error",
-                    Content = "Select a stat first!",
-                    Duration = 4,
-                    Image = "rbxassetid://4483362458"  -- Warning icon
-                })
+                Rayfield:Notify({Title = "Error", Content = "Pick a stat first!", Duration = 4})
                 autoStat = false
                 return
             end
             
             Rayfield:Notify({
                 Title = "Auto Stats",
-                Content = "Upgrading " .. selectedStat .. " endlessly...",
-                Duration = 4,
-                Image = "rbxassetid://4483345998"
+                Content = "Upgrading " .. selectedStat .. " forever...",
+                Duration = 4
             })
             
             task.spawn(function()
@@ -149,18 +117,23 @@ local Toggle = Tab:CreateToggle({
                     :WaitForChild("PutStat")
                 
                 while autoStat do
-                    local success, err = pcall(function()
-                        local args = {selectedStat, 1}  -- Uses selected stat!
-                        remote:InvokeServer(unpack(args))
+                    pcall(function()
+                        remote:InvokeServer(selectedStat, 1)
                     end)
                     
-                    if not success then
-                        warn("Auto Stat error (" .. selectedStat .. "): " .. tostring(err))
-                    end
-                    
-                    task.wait(0.25)  -- Delay between upgrades (safe rate)
+                    task.wait(0.25)  -- Safe delay – make it 0.4+ if kicked
                 end
             end)
         end
     end,
 })
+
+-- Loaded notification
+Rayfield:Notify({
+    Title = "Tha Boo Hub Loaded!",
+    Content = "Auto Clicker + Auto Stats ready. Select stat & toggle on!",
+    Duration = 5,
+    Image = "smile"
+})
+
+print("Tha Boo Hub loaded – no auto collect included")
