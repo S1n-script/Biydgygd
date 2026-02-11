@@ -1,43 +1,52 @@
--- Load Rayfield (working link as of 2026)
+-- Load Rayfield
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- Create the main window with improved visuals
+-- Window
 local Window = Rayfield:CreateWindow({
     Name = "HM Hub",
     LoadingTitle = "HM Hub",
-    LoadingSubtitle = "by Tha Hollows • Loading...",
+    LoadingSubtitle = "by Tha Hollows",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "HMhub",
         FileName = "Config"
     },
     KeySystem = false,
-    Theme = "Dark"  -- Optional: forces dark theme if supported in your Rayfield fork
 })
 
--- =====================================
--- MAIN TAB (Farming & Progression)
--- =====================================
-local MainTab = Window:CreateTab("Main", 4483362458)  -- Gear icon
+-- Main Tab
+local MainTab = Window:CreateTab("Main", 4483362458)
 
--- Auto Clicker Section
-local ClickSection = MainTab:CreateSection("Auto Clicker")
-local ClickToggle = ClickSection:CreateToggle({
+-- Variables
+local autoClick = false
+local autoStat = false
+local selectedStat = "Energy"
+local dailyReward = false
+local autoRankup = false
+local autoQuest = false
+local selectedQuestPart = "Nomek_Main_Part_1"
+local autoTitle = false
+
+-- Title list
+local titleList = {
+    "Adept", "Apprentice", "Amateur", "Trainee", "Novice",
+    "Recruit", "Challanger", "Combatant", "Competitor", "Fighter",
+    "Commander", "Warrior", "Elite Warrior", "Master"
+}
+
+-- Auto Clicker
+MainTab:CreateToggle({
     Name = "Auto Clicker",
     CurrentValue = false,
     Flag = "AutoClickToggle",
     Callback = function(Value)
         autoClick = Value
         if Value then
-            Rayfield:Notify({Title = "Auto Clicker", Content = "Clicking every ~0.03s...", Duration = 3})
+            Rayfield:Notify({Title = "Auto Clicker", Content = "Started (~0.1s delay)", Duration = 3})
             task.spawn(function()
                 while autoClick do
                     pcall(function()
-                        local clickRemote = game:GetService("ReplicatedStorage")
-                            :WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.5.1")
-                            :WaitForChild("knit"):WaitForChild("Services"):WaitForChild("ClickService")
-                            :WaitForChild("RF"):WaitForChild("Click")
-                        clickRemote:InvokeServer()
+                        game:GetService("ReplicatedStorage").Packages._Index["sleitnick_knit@1.5.1"].knit.Services.ClickService.RF.Click:InvokeServer()
                     end)
                     task.wait(0.1)
                 end
@@ -46,20 +55,19 @@ local ClickToggle = ClickSection:CreateToggle({
     end,
 })
 
--- Stats Section
-local StatsSection = MainTab:CreateSection("Auto Stats")
-local StatDropdown = StatsSection:CreateDropdown({
-    Name = "Stat Select",
+-- Stat Dropdown & Toggle
+MainTab:CreateDropdown({
+    Name = "Select Stat to Upgrade",
     Options = {"Energy", "Gems", "Luck", "Damage"},
     CurrentOption = {"Energy"},
     Flag = "SelectedStatFlag",
     Callback = function(Option)
         selectedStat = Option[1]
-        Rayfield:Notify({Title = "Stat Updated", Content = "Now auto-upgrading: " .. selectedStat, Duration = 3})
+        Rayfield:Notify({Title = "Stat", Content = "Selected: " .. selectedStat, Duration = 3})
     end,
 })
 
-local StatToggle = StatsSection:CreateToggle({
+MainTab:CreateToggle({
     Name = "Auto Upgrade Selected Stat",
     CurrentValue = false,
     Flag = "AutoStatToggle",
@@ -67,20 +75,15 @@ local StatToggle = StatsSection:CreateToggle({
         autoStat = Value
         if Value then
             if not selectedStat then
-                Rayfield:Notify({Title = "Error", Content = "Pick a stat first!", Duration = 4})
+                Rayfield:Notify({Title = "Error", Content = "Select a stat first", Duration = 4})
                 autoStat = false
                 return
             end
-            Rayfield:Notify({Title = "Auto Stats", Content = "Upgrading " .. selectedStat .. " forever...", Duration = 4})
+            Rayfield:Notify({Title = "Auto Stats", Content = "Upgrading " .. selectedStat, Duration = 4})
             task.spawn(function()
-                local remote = game:GetService("ReplicatedStorage")
-                    :WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.5.1")
-                    :WaitForChild("knit"):WaitForChild("Services"):WaitForChild("LevelService")
-                    :WaitForChild("RF"):WaitForChild("PutStat")
+                local remote = game:GetService("ReplicatedStorage").Packages._Index["sleitnick_knit@1.5.1"].knit.Services.LevelService.RF.PutStat
                 while autoStat do
-                    pcall(function()
-                        remote:InvokeServer(selectedStat, 1)
-                    end)
+                    pcall(function() remote:InvokeServer(selectedStat, 1) end)
                     task.wait(30)
                 end
             end)
@@ -88,26 +91,21 @@ local StatToggle = StatsSection:CreateToggle({
     end,
 })
 
--- Daily Rewards Section
-local DailySection = MainTab:CreateSection("Daily Rewards")
-local DailyToggle = DailySection:CreateToggle({
-    Name = "Auto Claim Daily Rewards (1-9)",
+-- Daily Rewards
+MainTab:CreateToggle({
+    Name = "Auto Claim Dailies (1-9)",
     CurrentValue = false,
     Flag = "DailyRewardToggle",
     Callback = function(Value)
         dailyReward = Value
         if Value then
-            Rayfield:Notify({Title = "Daily Rewards", Content = "Auto-claiming rewards 1–9 ...", Duration = 4})
+            Rayfield:Notify({Title = "Dailies", Content = "Claiming 1–9 every 60s", Duration = 4})
             task.spawn(function()
-                local remote = game:GetService("ReplicatedStorage")
-                    :WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.5.1")
-                    :WaitForChild("knit"):WaitForChild("Services"):WaitForChild("GiftService")
-                    :WaitForChild("RF"):WaitForChild("ClaimReward")
-                local rewardIDs = {1,2,3,4,5,6,7,8,9}
+                local remote = game:GetService("ReplicatedStorage").Packages._Index["sleitnick_knit@1.5.1"].knit.Services.GiftService.RF.ClaimReward
+                local ids = {1,2,3,4,5,6,7,8,9}
                 while dailyReward do
                     pcall(function()
-                        for _, id in ipairs(rewardIDs) do
-                            if not dailyReward then break end
+                        for _, id in ipairs(ids) do
                             remote:InvokeServer(id)
                             task.wait(0.2)
                         end
@@ -119,25 +117,19 @@ local DailyToggle = DailySection:CreateToggle({
     end,
 })
 
--- Rank Up Section
-local RankSection = MainTab:CreateSection("Rank Up")
-local RankToggle = RankSection:CreateToggle({
+-- Auto Rank Up
+MainTab:CreateToggle({
     Name = "Auto Rank Up",
     CurrentValue = false,
     Flag = "AutoRankUpToggle",
     Callback = function(Value)
         autoRankup = Value
         if Value then
-            Rayfield:Notify({Title = "Auto Rank Up", Content = "Attempting rank up...", Duration = 4})
+            Rayfield:Notify({Title = "Rank Up", Content = "Attempting every 60s", Duration = 4})
             task.spawn(function()
-                local remote = game:GetService("ReplicatedStorage")
-                    :WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.5.1")
-                    :WaitForChild("knit"):WaitForChild("Services"):WaitForChild("RankupService")
-                    :WaitForChild("RF"):WaitForChild("RankUp")
+                local remote = game:GetService("ReplicatedStorage").Packages._Index["sleitnick_knit@1.5.1"].knit.Services.RankupService.RF.RankUp
                 while autoRankup do
-                    pcall(function()
-                        remote:InvokeServer()
-                    end)
+                    pcall(function() remote:InvokeServer() end)
                     task.wait(60)
                 end
             end)
@@ -145,43 +137,39 @@ local RankToggle = RankSection:CreateToggle({
     end,
 })
 
--- Quest Section
-local QuestSection = MainTab:CreateSection("Quests")
-local QuestDropdown = QuestSection:CreateDropdown({
+-- Quest Dropdown & Toggle
+MainTab:CreateDropdown({
     Name = "Select Quest Part",
     Options = {"Nomek_Main_Part_1","Nomek_Main_Part_2","Nomek_Main_Part_3","Nomek_Main_Part_4","Nomek_Main_Part_5","Nomek_Main_Part_6","Nomek_Main_Part_7"},
     CurrentOption = {"Nomek_Main_Part_1"},
     Flag = "QuestPartFlag",
     Callback = function(Option)
         selectedQuestPart = Option[1]
-        Rayfield:Notify({Title = "Quest Selected", Content = "Now targeting: " .. selectedQuestPart, Duration = 3})
+        Rayfield:Notify({Title = "Quest", Content = "Selected: " .. selectedQuestPart, Duration = 3})
     end,
 })
 
-local QuestToggle = QuestSection:CreateToggle({
-    Name = "Auto Accept & Complete Selected Quest",
+MainTab:CreateToggle({
+    Name = "Auto Accept & Complete Quest",
     CurrentValue = false,
     Flag = "AutoQuestToggle",
     Callback = function(Value)
         autoQuest = Value
         if Value then
             if not selectedQuestPart then
-                Rayfield:Notify({Title = "Error", Content = "Select a quest part first!", Duration = 4})
+                Rayfield:Notify({Title = "Error", Content = "Select quest first", Duration = 4})
                 autoQuest = false
                 return
             end
-            Rayfield:Notify({Title = "Auto Quest", Content = "Accepting & completing " .. selectedQuestPart .. " endlessly...", Duration = 4})
+            Rayfield:Notify({Title = "Quest", Content = "Auto on: " .. selectedQuestPart, Duration = 4})
             task.spawn(function()
-                local questServiceRF = game:GetService("ReplicatedStorage")
-                    :WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.5.1")
-                    :WaitForChild("knit"):WaitForChild("Services"):WaitForChild("QuestService")
-                    :WaitForChild("RF")
-                local acceptRemote = questServiceRF:WaitForChild("AcceptQuest")
-                local completeRemote = questServiceRF:WaitForChild("CompleteQuest")
+                local rf = game:GetService("ReplicatedStorage").Packages._Index["sleitnick_knit@1.5.1"].knit.Services.QuestService.RF
+                local accept = rf.AcceptQuest
+                local complete = rf.CompleteQuest
                 while autoQuest do
                     pcall(function()
-                        acceptRemote:InvokeServer(selectedQuestPart)
-                        completeRemote:InvokeServer(selectedQuestPart)
+                        accept:InvokeServer(selectedQuestPart)
+                        complete:InvokeServer(selectedQuestPart)
                     end)
                     task.wait(60)
                 end
@@ -190,27 +178,21 @@ local QuestToggle = QuestSection:CreateToggle({
     end,
 })
 
--- Titles Section
-local TitlesSection = MainTab:CreateSection("Titles")
-local TitleToggle = TitlesSection:CreateToggle({
+-- Auto Titles
+MainTab:CreateToggle({
     Name = "Auto Buy Titles",
     CurrentValue = false,
     Flag = "AutoTitleToggle",
     Callback = function(Value)
         autoTitle = Value
         if Value then
-            Rayfield:Notify({Title = "Auto Titles", Content = "Attempting To Upgrade Title...", Duration = 4})
+            Rayfield:Notify({Title = "Titles", Content = "Buying loop started", Duration = 4})
             task.spawn(function()
-                local remote = game:GetService("ReplicatedStorage")
-                    :WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.5.1")
-                    :WaitForChild("knit"):WaitForChild("Services"):WaitForChild("TitleService")
-                    :WaitForChild("RF"):WaitForChild("Buy")
-                local titleList = {"Adept","Apprentice","Amateur","Trainee","Novice","Recruit","Challanger","Combatant","Competitor","Fighter","Commander","Warrior","Elite Warrior","Master"}
+                local remote = game:GetService("ReplicatedStorage").Packages._Index["sleitnick_knit@1.5.1"].knit.Services.TitleService.RF.Buy
                 while autoTitle do
                     pcall(function()
-                        for _, titleName in ipairs(titleList) do
-                            if not autoTitle then break end
-                            remote:InvokeServer(titleName)
+                        for _, t in ipairs(titleList) do
+                            remote:InvokeServer(t)
                             task.wait(0.4)
                         end
                     end)
@@ -221,31 +203,16 @@ local TitleToggle = TitlesSection:CreateToggle({
     end,
 })
 
--- Loaded notification with better styling
+-- Misc Tab (your existing one – unchanged)
+local MiscTab = Window:CreateTab("Misc", 4483362458)
+-- ... paste your Anti-AFK, Inf Jump, Server Hop, etc. here exactly as before ...
+
+-- Final load message
 Rayfield:Notify({
-    Title = "HM Hub Loaded!",
+    Title = "HM Hub Loaded",
     Content = "by Tha Hollows • All features ready",
     Duration = 6,
     Image = "smile"
 })
 
-print("HM Hub loaded – enhanced layout")
-
--- =====================================
--- MISC TAB (already clean – just added sections for consistency)
--- =====================================
-local MiscTab = Window:CreateTab("Misc", 4483362458)
-
-local AFKSection = MiscTab:CreateSection("Anti-AFK")
--- (your existing Anti-AFK toggle code here – unchanged)
-
-local JumpSection = MiscTab:CreateSection("Movement")
--- (your existing Infinite Jump toggle code here – unchanged)
-
-local SpeedSection = MiscTab:CreateSection("Speed")
--- (your existing Walk Speed slider code here – unchanged)
-
-local HopSection = MiscTab:CreateSection("Server")
--- (your existing Server Hop button code here – unchanged)
-
-MiscTab:CreateLabel("HM HUB Misc • Utility Tools")
+print("HM Hub loaded – clean layout")
