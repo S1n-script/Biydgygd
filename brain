@@ -526,5 +526,37 @@ MiscTab:CreateButton({
     end,
 })
 
+-- Add this anywhere after your MiscTab is created (e.g. at the bottom of the Misc tab code)
+MiscTab:CreateButton({
+    Name = "Destroy UI (Hide Hub)",
+    Callback = function()
+        Rayfield:Notify({
+            Title = "Destroying UI",
+            Content = "HM Hub will now be hidden. Re-execute script to reload.",
+            Duration = 5
+        })
+        
+        -- Small delay so the notification shows first
+        task.wait(1)
+        
+        -- Destroy the entire Rayfield UI
+        if Rayfield and Rayfield.Destroy then
+            Rayfield:Destroy()
+        elseif Window and Window.Destroy then
+            Window:Destroy()
+        else
+            -- Fallback: manually destroy the main ScreenGui (works in most cases)
+            local playerGui = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+            for _, gui in ipairs(playerGui:GetChildren()) do
+                if gui.Name:find("Rayfield") or gui.Name:find("HM Hub") or gui.Name == "InterfaceSuite" then
+                    gui:Destroy()
+                end
+            end
+        end
+        
+        print("HM Hub UI destroyed")
+    end,
+})
+
 -- Label at bottom
 MiscTab:CreateLabel("HM HUB Misc")
