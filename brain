@@ -329,7 +329,7 @@ local QuestToggle = MainTab:CreateToggle({
                         warn("Quest loop error (" .. selectedQuestPart .. "): " .. tostring(err))
                     end
                     
-                    task.wait(1.5)  -- Safe delay between full accept+complete attempts
+                    task.wait(60)  -- Safe delay between full accept+complete attempts
                 end
                 
                 Rayfield:Notify({
