@@ -228,6 +228,128 @@ local Toggle = MainTab:CreateToggle({  -- Use 'MainTab' from your full script
     end,
 })
 
+local autoReroll = false
+local selectedReroll = "Saiyan"  -- Default
+local consecutiveErrors = 0  -- Track errors for auto-stop on "out of currency"
+
+-- Dropdown to select reroll type
+local RerollDropdown = MainTab:CreateDropdown({
+    Name = "Select Reroll Type",
+    Options = {"Saiyan", "Dragon"},  -- Add more if needed ("Namek", etc.)
+    CurrentOption = {"Saiyan"},
+    MultipleOptions = false,
+    Flag = "RerollTypeFlag",
+    
+    Callback = function(Option)
+        selectedReroll = Option[1]
+        Rayfield:Notify({
+            Title = "Reroll Type",
+            Content = "Selected: " .. selectedReroll .. " (toggle to auto-farm secret)",
+            Duration = 3
+        })
+    end,
+})
+
+-- Toggle for auto-reroll until secret or out of currency
+local RerollToggle = MainTab:CreateToggle({
+    Name = "Auto Reroll Selected Type (Stops on Secret/Out of Currency)",
+    CurrentValue = false,
+    Flag = "AutoRerollToggle",
+    
+    Callback = function(Value)
+        autoReroll = Value
+        consecutiveErrors = 0  -- Reset error counter
+        
+        if Value then
+            if not selectedReroll then
+                Rayfield:Notify({
+                    Title = "Error",
+                    Content = "Select a reroll type first!",
+                    Duration = 4
+                })
+                autoReroll = false
+                return
+            end
+            
+            Rayfield:Notify({
+                Title = "Auto Reroll",
+                Content = "Farming " .. selectedReroll .. " until SECRET or no currency...",
+                Duration = 5
+            })
+            
+            task.spawn(function()
+                local remote = game:GetService("ReplicatedStorage")
+                    :WaitForChild("Packages")
+                    :WaitForChild("_Index")
+                    :WaitForChild("sleitnick_knit@1.5.1")
+                    :WaitForChild("knit")
+                    :WaitForChild("Services")
+                    :WaitForChild("RerollableService")
+                    :WaitForChild("RF")
+                    :WaitForChild("Reroll")
+                
+                while autoReroll do
+                    local success, result = pcall(function()
+                        return remote:InvokeServer(selectedReroll)
+                    end)
+                    
+                    if success then
+                        -- Check for "secret" rarity (adapt based on actual return format)
+                        -- Assume return is table like {rarity = "secret", ...} or string
+                        local rarity = ""
+                        if typeof(result) == "table" and result.rarity then
+                            rarity = result.rarity:lower()
+                        elseif typeof(result) == "string" then
+                            rarity = result:lower()
+                        end
+                        
+                        if rarity:find("secret") then
+                            Rayfield:Notify({
+                                Title = "SECRET GOT!",
+                                Content = "Secret rarity on " .. selectedReroll .. "! Stopping...",
+                                Duration = 10,
+                                Image = "rbxassetid://4483345998"  -- Checkmark
+                            })
+                            autoReroll = false
+                            break
+                        end
+                        
+                        Rayfield:Notify({
+                            Title = "Rerolled",
+                            Content = "Got: " .. (rarity ~= "" and rarity or "Common") .. " | Continuing...",
+                            Duration = 2
+                        })
+                        
+                        consecutiveErrors = 0  -- Reset on success
+                    else
+                        consecutiveErrors += 1
+                        warn("Reroll error (" .. consecutiveErrors .. "): " .. tostring(result))
+                        
+                        -- Auto-stop after 3 consecutive errors (likely out of currency)
+                        if consecutiveErrors >= 3 then
+                            Rayfield:Notify({
+                                Title = "Out of Currency?",
+                                Content = "Too many errors – likely out of currency. Stopped.",
+                                Duration = 6
+                            })
+                            autoReroll = false
+                            break
+                        end
+                    end
+                    
+                    task.wait(1.2)  -- Safe delay (adjust 0.8–2s to avoid kick)
+                end
+            end)
+        else
+            Rayfield:Notify({
+                Title = "Auto Reroll",
+                Content = "Stopped.",
+                Duration = 3
+            })
+        end
+    end,
+})
+
 -- =====================================
 -- AUTO STATS (with Dropdown)
 -- =====================================
