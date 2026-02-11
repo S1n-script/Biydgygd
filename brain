@@ -309,8 +309,8 @@ local QuestToggle = MainTab:CreateToggle({
                     :WaitForChild("AcceptQuest")
                 
                 -- Optional: If game has separate Complete/Claim remotes, add them here
-                -- local completeRemote = questRemote.Parent:WaitForChild("CompleteQuest")
-                -- local claimRemote = questRemote.Parent:WaitForChild("ClaimReward")
+                 local completeRemote = questRemote.Parent:WaitForChild("CompleteQuest")
+                 local claimRemote = questRemote.Parent:WaitForChild("ClaimReward")
                 
                 while autoQuest do
                     local success, err = pcall(function()
@@ -318,15 +318,15 @@ local QuestToggle = MainTab:CreateToggle({
                         questRemote:InvokeServer(selectedQuestPart)
                         
                         -- Optional: Complete + Claim if needed (uncomment & spy args)
-                        -- completeRemote:InvokeServer(selectedQuestPart)
-                        -- claimRemote:InvokeServer(selectedQuestPart)
+                         completeRemote:InvokeServer(selectedQuestPart)
+                         claimRemote:InvokeServer(selectedQuestPart)
                     end)
                     
                     if not success then
                         warn("Quest accept error: " .. tostring(err))
                     end
                     
-                    task.wait(1.2)  -- Delay between attempts (prevent kick / spam)
+                    task.wait(30)  -- Delay between attempts (prevent kick / spam)
                 end
                 
                 Rayfield:Notify({
