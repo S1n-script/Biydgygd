@@ -404,6 +404,7 @@ local TitleToggle = MainTab:CreateToggle({
 })
 
 -- Create Misc Tab (paste this after your MainTab or other tabs)
+task.wait(1)
 local MiscTab = Window:CreateTab("Misc", 4483362458)  -- Optional icon
 
 -- Variables
