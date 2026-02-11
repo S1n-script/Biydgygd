@@ -111,7 +111,7 @@ local TitleToggle = MainTab:CreateToggle({
                         -- Optional: break or notify on repeated fail
                     end
                     
-                    task.wait(120)  -- Delay between full cycles (all titles)
+                    task.wait(600)  -- Delay between full cycles (all titles)
                 end
                 
                 Rayfield:Notify({
@@ -163,7 +163,7 @@ local Toggle = MainTab:CreateToggle({  -- Assuming you're using MainTab from you
                         -- autoRankup = false
                     end
                     
-                    task.wait(60)  -- Safe delay – increase to 1 if kicked / rate-limited
+                    task.wait(600)  -- Safe delay – increase to 1 if kicked / rate-limited
                 end
                 
                 -- Optional: notify when stopped
@@ -221,7 +221,7 @@ local Toggle = MainTab:CreateToggle({  -- Use 'MainTab' from your full script
                         warn("Daily claim error: " .. tostring(err))
                     end
                     
-                    task.wait(60)  -- Delay between full cycles (1-9) – prevents kick
+                    task.wait(600)  -- Delay between full cycles (1-9) – prevents kick
                 end
             end)
         end
