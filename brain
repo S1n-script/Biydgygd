@@ -180,7 +180,7 @@ local Toggle = MainTab:CreateToggle({  -- Assuming you're using MainTab from you
 local dailyReward = false
 
 local Toggle = MainTab:CreateToggle({  -- Use 'MainTab' from your full script
-    Name = "Auto Claim Daily Rewards (1-9)",
+    Name = "Auto Claim Daily Rewards",
     CurrentValue = false,
     Flag = "DailyRewardToggle",
     
@@ -415,7 +415,7 @@ local infJump = false
 -- ANTI-AFK TOGGLE
 -- =====================================
 MiscTab:CreateToggle({
-    Name = "Anti-AFK (Move every 4 min)",
+    Name = "Anti-AFK",
     CurrentValue = false,
     Flag = "AntiAFKToggle",
     Callback = function(Value)
@@ -528,7 +528,7 @@ MiscTab:CreateButton({
 
 -- Add this anywhere after your MiscTab is created (e.g. at the bottom of the Misc tab code)
 MiscTab:CreateButton({
-    Name = "Destroy UI (Hide Hub)",
+    Name = "Destroy UI",
     Callback = function()
         Rayfield:Notify({
             Title = "Destroying UI",
@@ -573,7 +573,7 @@ local selectedTP = "Avatar Leveling"  -- Default
 
 -- TP Dropdown
 MiscTab:CreateDropdown({
-    Name = "TP to Important Area",
+    Name = "Areas Of Intrest",
     Options = {"Avatar Leveling", "Craft", "Dragon Reroll", "Saiyan Reroll", "Dragon Star"},
     CurrentOption = {"Avatar Leveling"},
     Flag = "TPAreaFlag",
