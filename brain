@@ -252,7 +252,7 @@ local RerollDropdown = MainTab:CreateDropdown({
 
 -- Toggle for auto-reroll until secret or out of currency
 local RerollToggle = MainTab:CreateToggle({
-    Name = "Auto Reroll Selected Type (Stops on Secret/Out of Currency)",
+    Name = "Auto Reroll",
     CurrentValue = false,
     Flag = "AutoRerollToggle",
     
