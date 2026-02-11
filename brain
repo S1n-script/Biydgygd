@@ -151,7 +151,7 @@ local Toggle = MainTab:CreateToggle({  -- Use 'MainTab' from your full script
         if Value then
             Rayfield:Notify({
                 Title = "Daily Rewards",
-                Content = "Auto-claiming rewards 1–9 endlessly...",
+                Content = "Auto-claiming rewards 1–9 ...",
                 Duration = 4
             })
             
@@ -202,7 +202,7 @@ local Toggle = MainTab:CreateToggle({  -- Assuming you're using MainTab from you
         if Value then
             Rayfield:Notify({
                 Title = "Auto Rank Up",
-                Content = "Attempting rank ups every ~0.5s...",
+                Content = "Attempting rank up...",
                 Duration = 4
             })
             
@@ -235,6 +235,103 @@ local Toggle = MainTab:CreateToggle({  -- Assuming you're using MainTab from you
                 Rayfield:Notify({
                     Title = "Auto Rank Up",
                     Content = "Stopped.",
+                    Duration = 3
+                })
+            end)
+        end
+    end,
+})
+
+local autoQuest = false
+local selectedQuestPart = "Nomek_Main_Part_1"  -- Default selected
+
+-- Dropdown to choose which quest to accept (and auto-farm)
+local QuestDropdown = MainTab:CreateDropdown({
+    Name = "Select Quest Part",
+    Options = {
+        "Nomek_Main_Part_1",
+        "Nomek_Main_Part_2",
+        "Nomek_Main_Part_3",
+        "Nomek_Main_Part_4",
+        "Nomek_Main_Part_5",
+        "Nomek_Main_Part_6",
+        "Nomek_Main_Part_7"
+    },
+    CurrentOption = {"Nomek_Main_Part_1"},
+    MultipleOptions = false,
+    Flag = "QuestPartFlag",
+    
+    Callback = function(Option)
+        selectedQuestPart = Option[1]  -- Rayfield passes table {selected}
+        Rayfield:Notify({
+            Title = "Quest Selected",
+            Content = "Now targeting: " .. selectedQuestPart,
+            Duration = 3
+        })
+    end,
+})
+
+-- Toggle to auto-accept + farm the selected quest
+local QuestToggle = MainTab:CreateToggle({
+    Name = "Auto Accept & Farm Selected Quest",
+    CurrentValue = false,
+    Flag = "AutoQuestToggle",
+    
+    Callback = function(Value)
+        autoQuest = Value
+        
+        if Value then
+            if not selectedQuestPart then
+                Rayfield:Notify({
+                    Title = "Error",
+                    Content = "Select a quest part first!",
+                    Duration = 4
+                })
+                autoQuest = false
+                return
+            end
+            
+            Rayfield:Notify({
+                Title = "Auto Quest",
+                Content = "Accepting & farming " .. selectedQuestPart .. " endlessly...",
+                Duration = 4
+            })
+            
+            task.spawn(function()
+                local questRemote = game:GetService("ReplicatedStorage")
+                    :WaitForChild("Packages")
+                    :WaitForChild("_Index")
+                    :WaitForChild("sleitnick_knit@1.5.1")
+                    :WaitForChild("knit")
+                    :WaitForChild("Services")
+                    :WaitForChild("QuestService")
+                    :WaitForChild("RF")
+                    :WaitForChild("AcceptQuest")
+                
+                -- Optional: If game has separate Complete/Claim remotes, add them here
+                -- local completeRemote = questRemote.Parent:WaitForChild("CompleteQuest")
+                -- local claimRemote = questRemote.Parent:WaitForChild("ClaimReward")
+                
+                while autoQuest do
+                    local success, err = pcall(function()
+                        -- Accept the selected quest (repeat in case of fail/cooldown)
+                        questRemote:InvokeServer(selectedQuestPart)
+                        
+                        -- Optional: Complete + Claim if needed (uncomment & spy args)
+                        -- completeRemote:InvokeServer(selectedQuestPart)
+                        -- claimRemote:InvokeServer(selectedQuestPart)
+                    end)
+                    
+                    if not success then
+                        warn("Quest accept error: " .. tostring(err))
+                    end
+                    
+                    task.wait(1.2)  -- Delay between attempts (prevent kick / spam)
+                end
+                
+                Rayfield:Notify({
+                    Title = "Auto Quest",
+                    Content = "Stopped farming " .. selectedQuestPart,
                     Duration = 3
                 })
             end)
