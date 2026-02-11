@@ -438,7 +438,14 @@ local QuestDropdown = MainTab:CreateDropdown({
         "Nomek_Main_Part_4",
         "Nomek_Main_Part_5",
         "Nomek_Main_Part_6",
-        "Nomek_Main_Part_7"
+        "Nomek_Main_Part_7",
+        "Leaf Village_Main_Part_1",
+        "Leaf Village_Main_Part_2",
+        "Leaf Village_Main_Part_3",
+        "Leaf Village_Main_Part_4",
+        "Leaf Village_Main_Part_5",
+        "Leaf Village_Main_Part_6",
+        "Leaf Village_Main_Part_7"
     },
     CurrentOption = {"Nomek_Main_Part_1"},
     MultipleOptions = false,
