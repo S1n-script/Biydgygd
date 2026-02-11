@@ -4,8 +4,8 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 -- Create the main window
 local Window = Rayfield:CreateWindow({
     Name = "HM Hub",
-    LoadingTitle = "Loading HM HUB...",
-    LoadingSubtitle = "by Tha Hollows",
+    LoadingTitle = "LOADING HM HUB...",
+    LoadingSubtitle = "By Tha Hollows",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "HMhub",
@@ -410,6 +410,58 @@ local MiscTab = Window:CreateTab("Misc", 4483362458)  -- Optional icon
 -- Variables
 local antiAFK = false
 local infJump = false
+
+-- Add this to your MiscTab (after existing features, before any labels)
+
+-- TP Variables
+local tpPositions = {
+    ["Avatar Leveling"] = Vector3.new(-5464.0126953125, 10374.0771484375, -3315.83349609375),
+    ["Craft"] = Vector3.new(-4873.64208984375, 10433.8935546875, -3030.97216796875),
+    ["Dragon Reroll"] = Vector3.new(-5279.40966796875, 10389.3125, -3522.92724609375),
+    ["Saiyan Reroll"] = Vector3.new(-4974.5849609375, 10409.408203125, -3498.215087890625),
+    ["Dragon Star"] = Vector3.new(-5297.517578125, 10391.60546875, -3417.10693359375)
+}
+local selectedTP = "Avatar Leveling"  -- Default
+
+-- TP Dropdown
+MiscTab:CreateDropdown({
+    Name = "TP to Important Area",
+    Options = {"Avatar Leveling", "Craft", "Dragon Reroll", "Saiyan Reroll", "Dragon Star"},
+    CurrentOption = {"Avatar Leveling"},
+    Flag = "TPAreaFlag",
+    Callback = function(Option)
+        selectedTP = Option[1]
+        local pos = tpPositions[selectedTP]
+        Rayfield:Notify({
+            Title = "TP Ready",
+            Content = selectedTP .. " (" .. math.floor(pos.X) .. ", " .. math.floor(pos.Y) .. ", " .. math.floor(pos.Z) .. ")",
+            Duration = 4
+        })
+    end,
+})
+
+-- TP Button
+MiscTab:CreateButton({
+    Name = "Teleport Now",
+    Callback = function()
+        local player = game.Players.LocalPlayer
+        local character = player.Character or player.CharacterAdded:Wait()
+        local hrp = character:WaitForChild("HumanoidRootPart")
+        
+        local pos = tpPositions[selectedTP]
+        hrp.CFrame = CFrame.new(pos + Vector3.new(0, 5, 0))  -- Slight Y offset to avoid clipping
+        
+        Rayfield:Notify({
+            Title = "Teleported!",
+            Content = "Zapped to " .. selectedTP,
+            Duration = 3,
+            Image = "rbxassetid://4483345998"  -- Checkmark
+        })
+    end,
+})
+
+-- Optional Separator Label
+MiscTab:CreateLabel("Important Areas TP – Select & Click!")
 
 -- =====================================
 -- ANTI-AFK TOGGLE
