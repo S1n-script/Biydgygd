@@ -338,3 +338,64 @@ local QuestToggle = MainTab:CreateToggle({
         end
     end,
 })
+
+local autoTitle = false
+local titleList = {
+    "Adept", "Apprentice", "Amateur", "Trainee", "Novice",
+    "Recruit", "Challanger", "Combatant", "Competitor", "Fighter",
+    "Commander", "Warrior", "Elite Warrior", "Master"
+}
+
+local TitleToggle = MainTab:CreateToggle({
+    Name = "Auto Buy Titles",
+    CurrentValue = false,
+    Flag = "AutoTitleToggle",
+    
+    Callback = function(Value)
+        autoTitle = Value
+        
+        if Value then
+            Rayfield:Notify({
+                Title = "Auto Titles",
+                Content = "Atempting To Upgrade Title...",
+                Duration = 4
+            })
+            
+            task.spawn(function()
+                local remote = game:GetService("ReplicatedStorage")
+                    :WaitForChild("Packages")
+                    :WaitForChild("_Index")
+                    :WaitForChild("sleitnick_knit@1.5.1")
+                    :WaitForChild("knit")
+                    :WaitForChild("Services")
+                    :WaitForChild("TitleService")
+                    :WaitForChild("RF")
+                    :WaitForChild("Buy")
+                
+                while autoTitle do
+                    local success, err = pcall(function()
+                        for _, titleName in ipairs(titleList) do
+                            if not autoTitle then break end
+                            
+                            remote:InvokeServer(titleName)
+                            task.wait(0.4)  -- Delay per title (anti-kick / rate-limit)
+                        end
+                    end)
+                    
+                    if not success then
+                        warn("Title buy error: " .. tostring(err))
+                        -- Optional: break or notify on repeated fail
+                    end
+                    
+                    task.wait(120)  -- Delay between full cycles (all titles)
+                end
+                
+                Rayfield:Notify({
+                    Title = "Auto Titles",
+                    Content = "Stopped buying titles.",
+                    Duration = 3
+                })
+            end)
+        end
+    end,
+})
