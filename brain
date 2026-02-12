@@ -56,7 +56,7 @@ local ClickToggle = MainTab:CreateToggle({
                         clickRemote:InvokeServer()
                     end)
                     
-                    task.wait(0.1)  -- Increase to 0.1 if you get kicked
+                    task.wait(1)  -- Increase to 0.1 if you get kicked
                 end
             end)
         end
@@ -235,7 +235,7 @@ local consecutiveErrors = 0  -- Track errors for auto-stop on "out of currency"
 -- Dropdown to select reroll type
 local RerollDropdown = MainTab:CreateDropdown({
     Name = "Select Reroll Type",
-    Options = {"Saiyan", "Dragon"},  -- Add more if needed ("Namek", etc.)
+    Options = {"Saiyan", "Dragon", "Jinchuriki", "Chakra"},  -- Add more if needed ("Namek", etc.)
     CurrentOption = {"Saiyan"},
     MultipleOptions = false,
     Flag = "RerollTypeFlag",
