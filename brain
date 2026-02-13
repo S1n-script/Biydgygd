@@ -231,7 +231,7 @@ end
 -- AUTO RANK UP TOGGLE
 -- =========================
 MainTab:CreateToggle({
-    Name = "Auto Rank Up (Smart)",
+    Name = "Auto Rank Up",
     CurrentValue = false,
     Flag = "AutoRankUpToggle",
 
