@@ -56,7 +56,7 @@ local ClickToggle = MainTab:CreateToggle({
                         clickRemote:InvokeServer()
                     end)
                     
-                    task.wait(0.5)  -- Increase to 0.1 if you get kicked
+                    task.wait(0.1)  -- Increase to 0.1 if you get kicked
                 end
             end)
         end
