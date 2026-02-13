@@ -425,86 +425,142 @@ Rayfield:Notify({
 
 print("Tha Boo Hub loaded – no auto collect included")
 
-MainTab:CreateDropdown({
+local autoQuest = false
+local selectedQuestPart = "Nomek_Main_Part_1"  -- Default selected
+
+-- Dropdown to choose which quest part to farm
+local QuestDropdown = MainTab:CreateDropdown({
     Name = "Select Quest Part",
     Options = {
-        "Nomek_Main_Part_1", "Nomek_Main_Part_2", "Nomek_Main_Part_3", "Nomek_Main_Part_4", "Nomek_Main_Part_5", "Nomek_Main_Part_6", "Nomek_Main_Part_7",
-        "Leaf Village_Main_Part_1", "Leaf Village_Main_Part_2", "Leaf Village_Main_Part_3", "Leaf Village_Main_Part_4", "Leaf Village_Main_Part_5", "Leaf Village_Main_Part_6", "Leaf Village_Main_Part_7",
-        "Egg City_Main_Part_1", "Egg City_Main_Part_2", "Egg City_Main_Part_3", "Egg City_Main_Part_4", "Egg City_Main_Part_5", "Egg City_Main_Part_6", "Egg City_Main_Part_7"
+        "Nomek_Main_Part_1",
+        "Nomek_Main_Part_2",
+        "Nomek_Main_Part_3",
+        "Nomek_Main_Part_4",
+        "Nomek_Main_Part_5",
+        "Nomek_Main_Part_6",
+        "Nomek_Main_Part_7",
+        "Leaf Village_Main_Part_1",
+        "Leaf Village_Main_Part_2",
+        "Leaf Village_Main_Part_3",
+        "Leaf Village_Main_Part_4",
+        "Leaf Village_Main_Part_5",
+        "Leaf Village_Main_Part_6",
+        "Leaf Village_Main_Part_7",
+        "Egg City_Main_Part_1",
+        "Egg City_Main_Part_2",
+        "Egg City_Main_Part_3",
+        "Egg City_Main_Part_4",
+        "Egg City_Main_Part_5",
+        "Egg City_Main_Part_6",
+        "Egg City_Main_Part_7"
     },
     CurrentOption = {"Nomek_Main_Part_1"},
+    MultipleOptions = false,
     Flag = "QuestPartFlag",
+    
     Callback = function(Option)
         selectedQuestPart = Option[1]
-        Rayfield:Notify({Title = "Quest", Content = "Selected: " .. selectedQuestPart, Duration = 3})
+        Rayfield:Notify({
+            Title = "Quest Selected",
+            Content = "Now targeting: " .. selectedQuestPart,
+            Duration = 3
+        })
     end,
 })
 
--- Auto Accept & Complete Quest
-MainTab:CreateToggle({
+-- Toggle to auto-accept + auto-complete the selected quest
+local QuestToggle = MainTab:CreateToggle({
     Name = "Auto Accept & Complete Selected Quest",
     CurrentValue = false,
     Flag = "AutoQuestToggle",
+    
     Callback = function(Value)
         autoQuest = Value
+        
         if Value then
             if not selectedQuestPart then
-                Rayfield:Notify({Title = "Error", Content = "Select a quest part first!", Duration = 4})
+                Rayfield:Notify({
+                    Title = "Error",
+                    Content = "Select a quest part first!",
+                    Duration = 4
+                })
                 autoQuest = false
                 return
             end
-            Rayfield:Notify({Title = "Auto Quest", Content = "Accepting & completing " .. selectedQuestPart, Duration = 4})
+            
+            Rayfield:Notify({
+                Title = "Auto Quest",
+                Content = "Accepting & completing " .. selectedQuestPart .. " endlessly...",
+                Duration = 4
+            })
+            
             task.spawn(function()
-                local rf = game:GetService("ReplicatedStorage").Packages._Index["sleitnick_knit@1.5.1"].knit.Services.QuestService.RF
-                local accept = rf.AcceptQuest
-                local complete = rf.CompleteQuest
+                local questServiceRF = game:GetService("ReplicatedStorage")
+                    :WaitForChild("Packages")
+                    :WaitForChild("_Index")
+                    :WaitForChild("sleitnick_knit@1.5.1")
+                    :WaitForChild("knit")
+                    :WaitForChild("Services")
+                    :WaitForChild("QuestService")
+                    :WaitForChild("RF")
+                
+                local acceptRemote = questServiceRF:WaitForChild("AcceptQuest")
+                local completeRemote = questServiceRF:WaitForChild("CompleteQuest")
+                
+                -- Optional: If there's also a ClaimReward remote, add it here later
+                -- local claimRemote = questServiceRF:WaitForChild("ClaimReward")
+                
                 while autoQuest do
-                    pcall(function()
-                        accept:InvokeServer(selectedQuestPart)
-                        complete:InvokeServer(selectedQuestPart)
+                    local success, err = pcall(function()
+                        -- Step 1: Try to accept (harmless if already accepted)
+                        acceptRemote:InvokeServer(selectedQuestPart)
+                        
+                        -- Step 2: Complete it immediately (this is what you asked to add)
+                        completeRemote:InvokeServer(selectedQuestPart)
+                        
+                        -- Optional Step 3: Claim if the game has a separate claim remote
+                        -- claimRemote:InvokeServer(selectedQuestPart)
                     end)
-                    task.wait(60)
+                    
+                    if not success then
+                        warn("Quest loop error (" .. selectedQuestPart .. "): " .. tostring(err))
+                    end
+                    
+                    task.wait(60)  -- Safe delay between full accept+complete attempts
                 end
+                
+                Rayfield:Notify({
+                    Title = "Auto Quest",
+                    Content = "Stopped working on " .. selectedQuestPart,
+                    Duration = 3
+                })
             end)
         end
     end,
 })
 
--- Auto Farm Mobs (Integrated)
+-- Auto Farm Mobs (Integrated – TP to Nearest Mob + Kill Aura)
 local autoFarmMobs = false
 
--- Mob area positions (UPDATE with real coordinates!)
-local questMobAreas = {
-    ["Nomek_Main_Part_1"] = Vector3.new(-5464.01, 10374.08, -3315.83),
-    ["Nomek_Main_Part_2"] = Vector3.new(-4873.64, 10433.89, -3030.97),
-    ["Nomek_Main_Part_3"] = Vector3.new(-5279.41, 10389.31, -3522.93),
-    ["Nomek_Main_Part_4"] = Vector3.new(-4974.58, 10409.41, -3498.22),
-    ["Nomek_Main_Part_5"] = Vector3.new(-5297.52, 10391.61, -3417.11),
-    ["Nomek_Main_Part_6"] = Vector3.new(0, 10, 0),
-    ["Nomek_Main_Part_7"] = Vector3.new(0, 10, 0),
-    ["Leaf Village_Main_Part_1"] = Vector3.new(0, 10, 0),
-    ["Leaf Village_Main_Part_2"] = Vector3.new(0, 10, 0),
-    ["Leaf Village_Main_Part_3"] = Vector3.new(0, 10, 0),
-    ["Leaf Village_Main_Part_4"] = Vector3.new(0, 10, 0),
-    ["Leaf Village_Main_Part_5"] = Vector3.new(0, 10, 0),
-    ["Leaf Village_Main_Part_6"] = Vector3.new(0, 10, 0),
-    ["Leaf Village_Main_Part_7"] = Vector3.new(0, 10, 0),
-    ["Egg City_Main_Part_1"] = Vector3.new(0, 10, 0),
-    ["Egg City_Main_Part_2"] = Vector3.new(0, 10, 0),
-    ["Egg City_Main_Part_3"] = Vector3.new(0, 10, 0),
-    ["Egg City_Main_Part_4"] = Vector3.new(0, 10, 0),
-    ["Egg City_Main_Part_5"] = Vector3.new(0, 10, 0),
-    ["Egg City_Main_Part_6"] = Vector3.new(0, 10, 0),
-    ["Egg City_Main_Part_7"] = Vector3.new(0, 10, 0)
+-- Mob keywords per Nomek quest part (ordered chronologically)
+local nomekMobKeywords = {
+    ["Nomek_Main_Part_1"] = "krulin",
+    ["Nomek_Main_Part_2"] = "koku",
+    ["Nomek_Main_Part_3"] = "trucks",
+    ["Nomek_Main_Part_4"] = "pickle",
+    ["Nomek_Main_Part_5"] = "freezer",
+    ["Nomek_Main_Part_6"] = "cell",
+    ["Nomek_Main_Part_7"] = "brulo"
 }
 
--- Mob name keywords (UPDATE!)
-local mobKeywords = {"Mob", "Enemy", "Nomek", "Leaf", "Saiyan", "Dragon", "Villager", "Egg"}
+-- Mob search folders (UPDATE if not in workspace root – e.g. workspace.Mobs)
+local mobFolders = {workspace}  -- Add workspace.Mobs, workspace.Enemies if needed
 
 MainTab:CreateToggle({
     Name = "Auto Farm Mobs for Selected Quest",
     CurrentValue = false,
     Flag = "AutoFarmMobsToggle",
+    
     Callback = function(Value)
         autoFarmMobs = Value
         
@@ -515,14 +571,18 @@ MainTab:CreateToggle({
                 return
             end
             
-            local targetPos = questMobAreas[selectedQuestPart]
-            if not targetPos or targetPos == Vector3.new(0, 10, 0) then
-                Rayfield:Notify({Title = "Error", Content = "No position set for this quest!", Duration = 5})
+            local mobKeyword = nomekMobKeywords[selectedQuestPart]
+            if selectedQuestPart:find("Nomek") and not mobKeyword then
+                Rayfield:Notify({Title = "Error", Content = "No mob keyword set for this Nomek quest!", Duration = 5})
                 autoFarmMobs = false
                 return
             end
             
-            Rayfield:Notify({Title = "Auto Farm", Content = "Farming mobs for " .. selectedQuestPart, Duration = 5})
+            Rayfield:Notify({
+                Title = "Auto Farm Mobs",
+                Content = "Farming mobs for " .. selectedQuestPart .. "...",
+                Duration = 5
+            })
             
             task.spawn(function()
                 local player = game.Players.LocalPlayer
@@ -534,43 +594,56 @@ MainTab:CreateToggle({
                         local character = player.Character or player.CharacterAdded:Wait()
                         local hrp = character:WaitForChild("HumanoidRootPart")
                         
-                        local tween = tweenService:Create(hrp, tweenInfo, {CFrame = CFrame.new(targetPos + Vector3.new(0, 5, 0))})
-                        tween:Play()
-                        tween.Completed:Wait()
+                        -- Find nearest matching mob
+                        local nearestMob, nearestDist = nil, math.huge
                         
-                        for i = 1, 100 do
-                            if not autoFarmMobs then break end
-                            
-                            for _, obj in ipairs(workspace:GetChildren()) do
-                                if obj:IsA("Model") and obj:FindFirstChild("Humanoid") then
+                        for _, folder in ipairs(mobFolders) do
+                            for _, obj in ipairs(folder:GetChildren()) do
+                                if obj:IsA("Model") and obj:FindFirstChild("Humanoid") and obj.Humanoid.Health > 0 then
                                     local nameLower = obj.Name:lower()
-                                    for _, keyword in ipairs(mobKeywords) do
-                                        if nameLower:find(keyword:lower()) then
-                                            local mobHRP = obj:FindFirstChild("HumanoidRootPart") or obj.PrimaryPart
-                                            if mobHRP and obj.Humanoid.Health > 0 then
-                                                firetouchinterest(hrp, mobHRP, 0)
-                                                task.wait(0.08)
-                                                firetouchinterest(hrp, mobHRP, 1)
-                                            end
-                                            break
+                                    local mobHRP = obj:FindFirstChild("HumanoidRootPart") or obj.PrimaryPart
+                                    if mobHRP then
+                                        local dist = (hrp.Position - mobHRP.Position).Magnitude
+                                        if dist < nearestDist and dist < 300 then  -- 300 studs max
+                                            nearestMob = obj
+                                            nearestDist = dist
                                         end
                                     end
                                 end
                             end
-                            
-                            task.wait(0.3)
+                        end
+                        
+                        if nearestMob then
+                            local mobHRP = nearestMob:FindFirstChild("HumanoidRootPart") or nearestMob.PrimaryPart
+                            if mobHRP then
+                                -- Tween to mob
+                                local targetCFrame = CFrame.new(mobHRP.Position + Vector3.new(0, 3, 0))  -- Slightly above
+                                local tween = tweenService:Create(hrp, tweenInfo, {CFrame = targetCFrame})
+                                tween:Play()
+                                tween.Completed:Wait()
+                                
+                                -- Kill loop (multiple touches if needed)
+                                for i = 1, 5 do
+                                    firetouchinterest(hrp, mobHRP, 0)
+                                    task.wait(0.08)
+                                    firetouchinterest(hrp, mobHRP, 1)
+                                    if nearestMob.Humanoid.Health <= 0 then break end
+                                end
+                            end
+                        else
+                            Rayfield:Notify({Title = "No Mobs", Content = "No mobs found – wait or move closer", Duration = 4})
+                            task.wait(5)
                         end
                     end)
-                    task.wait(2)
+                    
+                    task.wait(0.5)  -- Cycle rate
                 end
                 
-                Rayfield:Notify({Title = "Auto Farm", Content = "Stopped farming " .. selectedQuestPart, Duration = 3})
+                Rayfield:Notify({Title = "Auto Farm Mobs", Content = "Stopped", Duration = 3})
             end)
         end
     end,
 })
-
-MainTab:CreateLabel("Quest Farming: Select quest → Toggle Auto Farm Mobs")
 
 -- Create Misc Tab (paste this after your MainTab or other tabs)
 task.wait(1)
