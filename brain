@@ -425,113 +425,162 @@ Rayfield:Notify({
 
 print("Tha Boo Hub loaded – no auto collect included")
 
-local autoQuest = false
-local selectedQuestPart = "Nomek_Main_Part_1"  -- Default selected
-
--- Dropdown to choose which quest part to farm
-local QuestDropdown = MainTab:CreateDropdown({
+MainTab:CreateDropdown({
     Name = "Select Quest Part",
     Options = {
-        "Nomek_Main_Part_1",
-        "Nomek_Main_Part_2",
-        "Nomek_Main_Part_3",
-        "Nomek_Main_Part_4",
-        "Nomek_Main_Part_5",
-        "Nomek_Main_Part_6",
-        "Nomek_Main_Part_7",
-        "Leaf Village_Main_Part_1",
-        "Leaf Village_Main_Part_2",
-        "Leaf Village_Main_Part_3",
-        "Leaf Village_Main_Part_4",
-        "Leaf Village_Main_Part_5",
-        "Leaf Village_Main_Part_6",
-        "Leaf Village_Main_Part_7"
+        "Nomek_Main_Part_1", "Nomek_Main_Part_2", "Nomek_Main_Part_3", "Nomek_Main_Part_4", "Nomek_Main_Part_5", "Nomek_Main_Part_6", "Nomek_Main_Part_7",
+        "Leaf Village_Main_Part_1", "Leaf Village_Main_Part_2", "Leaf Village_Main_Part_3", "Leaf Village_Main_Part_4", "Leaf Village_Main_Part_5", "Leaf Village_Main_Part_6", "Leaf Village_Main_Part_7",
+        "Egg City_Main_Part_1", "Egg City_Main_Part_2", "Egg City_Main_Part_3", "Egg City_Main_Part_4", "Egg City_Main_Part_5", "Egg City_Main_Part_6", "Egg City_Main_Part_7"
     },
     CurrentOption = {"Nomek_Main_Part_1"},
-    MultipleOptions = false,
     Flag = "QuestPartFlag",
-    
     Callback = function(Option)
         selectedQuestPart = Option[1]
-        Rayfield:Notify({
-            Title = "Quest Selected",
-            Content = "Now targeting: " .. selectedQuestPart,
-            Duration = 3
-        })
+        Rayfield:Notify({Title = "Quest", Content = "Selected: " .. selectedQuestPart, Duration = 3})
     end,
 })
 
--- Toggle to auto-accept + auto-complete the selected quest
-local QuestToggle = MainTab:CreateToggle({
+-- Auto Accept & Complete Quest
+MainTab:CreateToggle({
     Name = "Auto Accept & Complete Selected Quest",
     CurrentValue = false,
     Flag = "AutoQuestToggle",
-    
     Callback = function(Value)
         autoQuest = Value
+        if Value then
+            if not selectedQuestPart then
+                Rayfield:Notify({Title = "Error", Content = "Select a quest part first!", Duration = 4})
+                autoQuest = false
+                return
+            end
+            Rayfield:Notify({Title = "Auto Quest", Content = "Accepting & completing " .. selectedQuestPart, Duration = 4})
+            task.spawn(function()
+                local rf = game:GetService("ReplicatedStorage").Packages._Index["sleitnick_knit@1.5.1"].knit.Services.QuestService.RF
+                local accept = rf.AcceptQuest
+                local complete = rf.CompleteQuest
+                while autoQuest do
+                    pcall(function()
+                        accept:InvokeServer(selectedQuestPart)
+                        complete:InvokeServer(selectedQuestPart)
+                    end)
+                    task.wait(60)
+                end
+            end)
+        end
+    end,
+})
+
+-- Auto Farm Mobs (Integrated – TP + Kill Aura for the selected quest)
+local autoFarmMobs = false
+
+-- Mob area positions (UPDATE with real coordinates from Dex Explorer!)
+local questMobAreas = {
+    ["Nomek_Main_Part_1"] = Vector3.new(-5464.01, 10374.08, -3315.83),
+    ["Nomek_Main_Part_2"] = Vector3.new(-4873.64, 10433.89, -3030.97),
+    ["Nomek_Main_Part_3"] = Vector3.new(-5279.41, 10389.31, -3522.93),
+    ["Nomek_Main_Part_4"] = Vector3.new(-4974.58, 10409.41, -3498.22),
+    ["Nomek_Main_Part_5"] = Vector3.new(-5297.52, 10391.61, -3417.11),
+    ["Nomek_Main_Part_6"] = Vector3.new(0, 10, 0),     -- UPDATE
+    ["Nomek_Main_Part_7"] = Vector3.new(0, 10, 0),     -- UPDATE
+    ["Leaf Village_Main_Part_1"] = Vector3.new(0, 10, 0),   -- UPDATE
+    ["Leaf Village_Main_Part_2"] = Vector3.new(0, 10, 0),
+    ["Leaf Village_Main_Part_3"] = Vector3.new(0, 10, 0),
+    ["Leaf Village_Main_Part_4"] = Vector3.new(0, 10, 0),
+    ["Leaf Village_Main_Part_5"] = Vector3.new(0, 10, 0),
+    ["Leaf Village_Main_Part_6"] = Vector3.new(0, 10, 0),
+    ["Leaf Village_Main_Part_7"] = Vector3.new(0, 10, 0),
+    ["Egg City_Main_Part_1"] = Vector3.new(0, 10, 0),   -- UPDATE
+    ["Egg City_Main_Part_2"] = Vector3.new(0, 10, 0),
+    ["Egg City_Main_Part_3"] = Vector3.new(0, 10, 0),
+    ["Egg City_Main_Part_4"] = Vector3.new(0, 10, 0),
+    ["Egg City_Main_Part_5"] = Vector3.new(0, 10, 0),
+    ["Egg City_Main_Part_6"] = Vector3.new(0, 10, 0),
+    ["Egg City_Main_Part_7"] = Vector3.new(0, 10, 0)
+}
+
+-- Keywords to identify mobs (UPDATE based on your game)
+local mobKeywords = {"Mob", "Enemy", "Nomek", "Leaf", "Saiyan", "Dragon", "Villager", "Egg"}
+
+local FarmMobsToggle = MainTab:CreateToggle({
+    Name = "Auto Farm Mobs for Selected Quest",
+    CurrentValue = false,
+    Flag = "AutoFarmMobsToggle",
+    
+    Callback = function(Value)
+        autoFarmMobs = Value
         
         if Value then
             if not selectedQuestPart then
-                Rayfield:Notify({
-                    Title = "Error",
-                    Content = "Select a quest part first!",
-                    Duration = 4
-                })
-                autoQuest = false
+                Rayfield:Notify({Title = "Error", Content = "Select a quest part first!", Duration = 4})
+                autoFarmMobs = false
+                return
+            end
+            
+            local targetPos = questMobAreas[selectedQuestPart]
+            if not targetPos or targetPos == Vector3.new(0, 10, 0) then
+                Rayfield:Notify({Title = "Error", Content = "No valid position set for " .. selectedQuestPart .. "!", Duration = 5})
+                autoFarmMobs = false
                 return
             end
             
             Rayfield:Notify({
-                Title = "Auto Quest",
-                Content = "Accepting & completing " .. selectedQuestPart .. " endlessly...",
-                Duration = 4
+                Title = "Auto Farm Mobs",
+                Content = "TP + killing mobs for " .. selectedQuestPart .. "...",
+                Duration = 5
             })
             
             task.spawn(function()
-                local questServiceRF = game:GetService("ReplicatedStorage")
-                    :WaitForChild("Packages")
-                    :WaitForChild("_Index")
-                    :WaitForChild("sleitnick_knit@1.5.1")
-                    :WaitForChild("knit")
-                    :WaitForChild("Services")
-                    :WaitForChild("QuestService")
-                    :WaitForChild("RF")
+                local player = game.Players.LocalPlayer
+                local tweenService = game:GetService("TweenService")
+                local tweenInfo = TweenInfo.new(1.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
                 
-                local acceptRemote = questServiceRF:WaitForChild("AcceptQuest")
-                local completeRemote = questServiceRF:WaitForChild("CompleteQuest")
-                
-                -- Optional: If there's also a ClaimReward remote, add it here later
-                -- local claimRemote = questServiceRF:WaitForChild("ClaimReward")
-                
-                while autoQuest do
-                    local success, err = pcall(function()
-                        -- Step 1: Try to accept (harmless if already accepted)
-                        acceptRemote:InvokeServer(selectedQuestPart)
+                while autoFarmMobs do
+                    pcall(function()
+                        local character = player.Character or player.CharacterAdded:Wait()
+                        local hrp = character:WaitForChild("HumanoidRootPart")
                         
-                        -- Step 2: Complete it immediately (this is what you asked to add)
-                        completeRemote:InvokeServer(selectedQuestPart)
+                        -- Smooth tween to mob area
+                        local tween = tweenService:Create(hrp, tweenInfo, {CFrame = CFrame.new(targetPos + Vector3.new(0, 5, 0))})
+                        tween:Play()
+                        tween.Completed:Wait()
                         
-                        -- Optional Step 3: Claim if the game has a separate claim remote
-                        -- claimRemote:InvokeServer(selectedQuestPart)
+                        -- Kill aura loop
+                        for i = 1, 100 do
+                            if not autoFarmMobs then break end
+                            
+                            for _, obj in ipairs(workspace:GetChildren()) do
+                                if obj:IsA("Model") and obj:FindFirstChild("Humanoid") then
+                                    local nameLower = obj.Name:lower()
+                                    for _, keyword in ipairs(mobKeywords) do
+                                        if nameLower:find(keyword:lower()) then
+                                            local mobHRP = obj:FindFirstChild("HumanoidRootPart") or obj.PrimaryPart
+                                            if mobHRP and obj.Humanoid.Health > 0 then
+                                                firetouchinterest(hrp, mobHRP, 0)
+                                                task.wait(0.08)
+                                                firetouchinterest(hrp, mobHRP, 1)
+                                            end
+                                            break
+                                        end
+                                    end
+                                end
+                            end
+                            
+                            task.wait(0.3)
+                        end
                     end)
                     
-                    if not success then
-                        warn("Quest loop error (" .. selectedQuestPart .. "): " .. tostring(err))
-                    end
-                    
-                    task.wait(60)  -- Safe delay between full accept+complete attempts
+                    task.wait(2)
                 end
                 
                 Rayfield:Notify({
-                    Title = "Auto Quest",
-                    Content = "Stopped working on " .. selectedQuestPart,
+                    Title = "Auto Farm Mobs",
+                    Content = "Stopped farming for " .. selectedQuestPart,
                     Duration = 3
                 })
             end)
         end
     end,
 })
-
 -- Create Misc Tab (paste this after your MainTab or other tabs)
 task.wait(1)
 local MiscTab = Window:CreateTab("Misc", 4483362458)  -- Optional icon
