@@ -416,7 +416,7 @@ local StatToggle = MainTab:CreateToggle({
 })
 
 -- =====================================
--- SERVICES & PLAYER
+-- SERVICES
 -- =====================================
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -443,31 +443,25 @@ end)
 -- =====================================
 -- VARIABLES
 -- =====================================
-local selectedQuestPart
+local selectedQuestPart = nil
 local autoQuest = false
-local autoFarmMobs = false
+local autoFarm = false
 
 -- =====================================
 -- QUEST → ISLAND MAPPER
 -- =====================================
-local function getIslandFromQuest(questName)
-    if not questName then return nil end
-
-    if questName:find("Nomek") then
-        return "Nomek"
-    elseif questName:find("Leaf") then
-        return "LeafVillage"
-    elseif questName:find("Egg") then
-        return "EggCity"
-    end
-
+local function getIslandFromQuest(quest)
+    if not quest then return nil end
+    if quest:find("Nomek") then return "Nomek" end
+    if quest:find("Leaf") then return "LeafVillage" end
+    if quest:find("Egg") then return "EggCity" end
     return nil
 end
 
 -- =====================================
 -- QUEST REMOTES
 -- =====================================
-local questServiceRF = ReplicatedStorage
+local questRF = ReplicatedStorage
     :WaitForChild("Packages")
     :WaitForChild("_Index")
     :WaitForChild("sleitnick_knit@1.5.1")
@@ -476,8 +470,8 @@ local questServiceRF = ReplicatedStorage
     :WaitForChild("QuestService")
     :WaitForChild("RF")
 
-local acceptQuest = questServiceRF:WaitForChild("AcceptQuest")
-local completeQuest = questServiceRF:WaitForChild("CompleteQuest")
+local acceptQuest = questRF:WaitForChild("AcceptQuest")
+local completeQuest = questRF:WaitForChild("CompleteQuest")
 
 -- =====================================
 -- QUEST DROPDOWN
@@ -508,16 +502,16 @@ MainTab:CreateToggle({
     Name = "Auto Accept & Complete Quest",
     CurrentValue = false,
 
-    Callback = function(val)
-        autoQuest = val
-        if not val then return end
+    Callback = function(v)
+        autoQuest = v
+        if not v then return end
         if not selectedQuestPart then return end
 
         task.spawn(function()
             while autoQuest do
                 pcall(function()
                     acceptQuest:InvokeServer(selectedQuestPart)
-                    task.wait(10) -- allow mob kills
+                    task.wait(10)
                     completeQuest:InvokeServer(selectedQuestPart)
                 end)
                 task.wait(2)
@@ -532,24 +526,25 @@ MainTab:CreateToggle({
 local MobSpawns = workspace:WaitForChild("MobSpawns")
 
 -- =====================================
--- ISLAND MOB FINDER (CORRECT FIX)
+-- FIND NEAREST MOB ON QUEST ISLAND
+-- (FIXED: handles nested spawn folders)
 -- =====================================
 local function getNearestIslandMob(hrp, island)
     local islandFolder = MobSpawns:FindFirstChild(island)
     if not islandFolder then return nil end
 
-    local nearest, dist = nil, math.huge
+    local nearest, nearestDist = nil, math.huge
 
-    for _, mob in ipairs(islandFolder:GetChildren()) do
-        if mob:IsA("Model") then
-            local hum = mob:FindFirstChildOfClass("Humanoid")
-            local root = mob:FindFirstChild("HumanoidRootPart")
+    for _, obj in ipairs(islandFolder:GetDescendants()) do
+        if obj:IsA("Model") then
+            local hum = obj:FindFirstChildOfClass("Humanoid")
+            local root = obj:FindFirstChild("HumanoidRootPart") or obj.PrimaryPart
 
             if hum and root and hum.Health > 0 then
-                local d = (hrp.Position - root.Position).Magnitude
-                if d < dist and d < 400 then
-                    nearest = mob
-                    dist = d
+                local dist = (hrp.Position - root.Position).Magnitude
+                if dist < nearestDist then
+                    nearest = obj
+                    nearestDist = dist
                 end
             end
         end
@@ -565,52 +560,54 @@ MainTab:CreateToggle({
     Name = "Auto Farm Quest Mobs (Teleport)",
     CurrentValue = false,
 
-    Callback = function(val)
-        autoFarmMobs = val
-        if not val then return end
+    Callback = function(v)
+        autoFarm = v
+        if not v then return end
         if not selectedQuestPart then return end
 
         local island = getIslandFromQuest(selectedQuestPart)
         if not island then return end
 
         task.spawn(function()
-            while autoFarmMobs do
-                local char = player.Character
-                local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                local hum = char and char:FindFirstChildOfClass("Humanoid")
+            while autoFarm do
+                local char = player.Character or player.CharacterAdded:Wait()
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                local hum = char:FindFirstChildOfClass("Humanoid")
 
                 if not hrp or not hum or hum.Health <= 0 then
-                    task.wait(2)
+                    task.wait(1)
                     continue
                 end
 
                 local mob = getNearestIslandMob(hrp, island)
-                if mob then
-                    local mobRoot = mob:FindFirstChild("HumanoidRootPart")
-                    local mobHum = mob:FindFirstChildOfClass("Humanoid")
 
-                    if mobRoot and mobHum then
-                        -- TELEPORT (NO TWEEN)
+                if mob then
+                    local mobHum = mob:FindFirstChildOfClass("Humanoid")
+                    local mobRoot = mob:FindFirstChild("HumanoidRootPart") or mob.PrimaryPart
+
+                    if mobHum and mobRoot then
+                        -- ⚡ TELEPORT
                         hrp.CFrame = mobRoot.CFrame * CFrame.new(0, 0, -3)
 
-                        for i = 1, 12 do
-                            if not autoFarmMobs or mobHum.Health <= 0 then break end
+                        -- ATTACK LOOP
+                        for i = 1, 15 do
+                            if not autoFarm or mobHum.Health <= 0 then break end
                             firetouchinterest(hrp, mobRoot, 0)
                             firetouchinterest(hrp, mobRoot, 1)
-                            task.wait(0.08)
+                            task.wait(0.07)
                         end
                     end
                 else
                     task.wait(1.5)
                 end
 
-                task.wait(0.25)
+                task.wait(0.2)
             end
         end)
     end
 })
 
-MainTab:CreateLabel("Flow: Select Quest → Enable Auto Farm → Enable Auto Quest")
+MainTab:CreateLabel("Select Quest → Enable Auto Farm → Enable Auto Quest")
 
 -- Create Misc Tab (paste this after your MainTab or other tabs)
 task.wait(1)
