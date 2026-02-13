@@ -415,18 +415,17 @@ local StatToggle = MainTab:CreateToggle({
     end,
 })
 
--- Loaded notification
-Rayfield:Notify({
-    Title = "HM Hub Loaded!",
-    Content = "Auto Clicker + Auto Stats ready. Select stat & toggle on!",
-    Duration = 5,
-    Image = "smile"
-})
+-- =====================================
+-- SERVICES & PLAYER
+-- =====================================
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local player = Players.LocalPlayer
 
-print("Tha Boo Hub loaded – no auto collect included")
-
--- Suppress EnemyService spawn event spam (queue exhausted fix)
-local enemySpawnEvent = game:GetService("ReplicatedStorage")
+-- =====================================
+-- SAFE ENEMY SPAWN EVENT FIX
+-- =====================================
+local enemySpawnEvent = ReplicatedStorage
     :WaitForChild("Packages")
     :WaitForChild("_Index")
     :WaitForChild("sleitnick_knit@1.5.1")
@@ -436,63 +435,53 @@ local enemySpawnEvent = game:GetService("ReplicatedStorage")
     :WaitForChild("RE")
     :WaitForChild("Spawned")
 
--- Dummy handler to silently consume events
-enemySpawnEvent.OnClientEvent:Connect(function() end)
-
--- Quest Dropdown
-MainTab:CreateDropdown({
-    Name = "Select Quest Part",
-    Options = {
-        "Nomek_Main_Part_1", "Nomek_Main_Part_2", "Nomek_Main_Part_3", "Nomek_Main_Part_4", "Nomek_Main_Part_5", "Nomek_Main_Part_6", "Nomek_Main_Part_7",
-        "Leaf Village_Main_Part_1", "Leaf Village_Main_Part_2", "Leaf Village_Main_Part_3", "Leaf Village_Main_Part_4", "Leaf Village_Main_Part_5", "Leaf Village_Main_Part_6", "Leaf Village_Main_Part_7",
-        "Egg City_Main_Part_1", "Egg City_Main_Part_2", "Egg City_Main_Part_3", "Egg City_Main_Part_4", "Egg City_Main_Part_5", "Egg City_Main_Part_6", "Egg City_Main_Part_7"
-    },
-    CurrentOption = {"Nomek_Main_Part_1"},
-    MultipleOptions = false,
-    Flag = "QuestPartFlag",
-    
-    Callback = function(Option)
-        selectedQuestPart = Option[1]
-        Rayfield:Notify({
-            Title = "Quest Selected",
-            Content = "Now targeting: " .. selectedQuestPart,
-            Duration = 3
-        })
-    end,
-})
-
--- =========================
--- SAFE ENEMY SPAWN SPAM FIX
--- =========================
-local enemySpawnEvent = game:GetService("ReplicatedStorage")
-    :WaitForChild("Packages")
-    :WaitForChild("_Index")
-    :WaitForChild("sleitnick_knit@1.5.1")
-    :WaitForChild("knit")
-    :WaitForChild("Services")
-    :WaitForChild("EnemyService")
-    :WaitForChild("RE")
-    :WaitForChild("Spawned")
-
--- Disconnect after first fire (safer than permanent dummy)
 local spawnConn
 spawnConn = enemySpawnEvent.OnClientEvent:Connect(function()
     spawnConn:Disconnect()
 end)
 
--- =========================
+-- =====================================
 -- VARIABLES
--- =========================
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-
-local selectedQuestPart = nil
+-- =====================================
+local selectedQuestPart
 local autoQuest = false
 local autoFarmMobs = false
 
--- =========================
+-- =====================================
+-- QUEST → ISLAND MAPPER
+-- =====================================
+local function getIslandFromQuest(questName)
+    if not questName then return nil end
+
+    if questName:find("Nomek") then
+        return "Nomek"
+    elseif questName:find("Leaf") then
+        return "LeafVillage"
+    elseif questName:find("Egg") then
+        return "EggCity"
+    end
+
+    return nil
+end
+
+-- =====================================
+-- QUEST REMOTES
+-- =====================================
+local questServiceRF = ReplicatedStorage
+    :WaitForChild("Packages")
+    :WaitForChild("_Index")
+    :WaitForChild("sleitnick_knit@1.5.1")
+    :WaitForChild("knit")
+    :WaitForChild("Services")
+    :WaitForChild("QuestService")
+    :WaitForChild("RF")
+
+local acceptQuest = questServiceRF:WaitForChild("AcceptQuest")
+local completeQuest = questServiceRF:WaitForChild("CompleteQuest")
+
+-- =====================================
 -- QUEST DROPDOWN
--- =========================
+-- =====================================
 MainTab:CreateDropdown({
     Name = "Select Quest Part",
     Options = {
@@ -502,104 +491,65 @@ MainTab:CreateDropdown({
     },
     CurrentOption = {"Nomek_Main_Part_1"},
     MultipleOptions = false,
-    Flag = "QuestPartFlag",
-
-    Callback = function(Option)
-        selectedQuestPart = Option[1]
+    Callback = function(opt)
+        selectedQuestPart = opt[1]
         Rayfield:Notify({
             Title = "Quest Selected",
-            Content = "Targeting: " .. selectedQuestPart,
+            Content = selectedQuestPart,
             Duration = 3
         })
     end
 })
 
--- =========================
--- QUEST REMOTES
--- =========================
-local questServiceRF = game:GetService("ReplicatedStorage")
-    :WaitForChild("Packages")
-    :WaitForChild("_Index")
-    :WaitForChild("sleitnick_knit@1.5.1")
-    :WaitForChild("knit")
-    :WaitForChild("Services")
-    :WaitForChild("QuestService")
-    :WaitForChild("RF")
-
-local acceptRemote = questServiceRF:WaitForChild("AcceptQuest")
-local completeRemote = questServiceRF:WaitForChild("CompleteQuest")
-
--- =========================
--- AUTO QUEST TOGGLE
--- =========================
+-- =====================================
+-- AUTO QUEST
+-- =====================================
 MainTab:CreateToggle({
     Name = "Auto Accept & Complete Quest",
     CurrentValue = false,
-    Flag = "AutoQuestToggle",
 
-    Callback = function(Value)
-        autoQuest = Value
-
-        if not Value then return end
-        if not selectedQuestPart then
-            Rayfield:Notify({Title="Error",Content="Select a quest first!",Duration=4})
-            autoQuest = false
-            return
-        end
-
-        Rayfield:Notify({
-            Title = "Auto Quest",
-            Content = "Running quest loop for " .. selectedQuestPart,
-            Duration = 4
-        })
+    Callback = function(val)
+        autoQuest = val
+        if not val then return end
+        if not selectedQuestPart then return end
 
         task.spawn(function()
             while autoQuest do
-                local success, err = pcall(function()
-                    acceptRemote:InvokeServer(selectedQuestPart)
-                    task.wait(8) -- allow kills to register
-                    completeRemote:InvokeServer(selectedQuestPart)
+                pcall(function()
+                    acceptQuest:InvokeServer(selectedQuestPart)
+                    task.wait(10) -- allow mob kills
+                    completeQuest:InvokeServer(selectedQuestPart)
                 end)
-
-                if not success then
-                    warn("[Quest Error]:", err)
-                end
-
                 task.wait(2)
             end
         end)
     end
 })
 
--- =========================
--- MOB FOLDERS (EDIT IF NEEDED)
--- =========================
-local mobFolders = {
-    workspace:FindFirstChild("Mobs"),
-    workspace:FindFirstChild("Enemies"),
-    workspace:FindFirstChild("NPCs"),
-    workspace:FindFirstChild("QuestMobs")
-}
+-- =====================================
+-- MOB SPAWNS ROOT
+-- =====================================
+local MobSpawns = workspace:WaitForChild("MobSpawns")
 
--- =========================
--- NEAREST MOB FUNCTION
--- =========================
-local function getNearestMob(hrp)
-    local nearest, nearestDist = nil, math.huge
+-- =====================================
+-- ISLAND MOB FINDER (CORRECT FIX)
+-- =====================================
+local function getNearestIslandMob(hrp, island)
+    local islandFolder = MobSpawns:FindFirstChild(island)
+    if not islandFolder then return nil end
 
-    for _, folder in ipairs(mobFolders) do
-        if folder then
-            for _, mob in ipairs(folder:GetChildren()) do
-                if mob:IsA("Model") then
-                    local hum = mob:FindFirstChildOfClass("Humanoid")
-                    local root = mob:FindFirstChild("HumanoidRootPart")
-                    if hum and root and hum.Health > 0 then
-                        local dist = (hrp.Position - root.Position).Magnitude
-                        if dist < nearestDist and dist < 350 then
-                            nearest = mob
-                            nearestDist = dist
-                        end
-                    end
+    local nearest, dist = nil, math.huge
+
+    for _, mob in ipairs(islandFolder:GetChildren()) do
+        if mob:IsA("Model") then
+            local hum = mob:FindFirstChildOfClass("Humanoid")
+            local root = mob:FindFirstChild("HumanoidRootPart")
+
+            if hum and root and hum.Health > 0 then
+                local d = (hrp.Position - root.Position).Magnitude
+                if d < dist and d < 400 then
+                    nearest = mob
+                    dist = d
                 end
             end
         end
@@ -608,55 +558,46 @@ local function getNearestMob(hrp)
     return nearest
 end
 
--- =========================
--- AUTO FARM TOGGLE
--- =========================
+-- =====================================
+-- AUTO FARM QUEST MOBS (TELEPORT)
+-- =====================================
 MainTab:CreateToggle({
-    Name = "Auto Farm Mobs (Quest)",
+    Name = "Auto Farm Quest Mobs (Teleport)",
     CurrentValue = false,
-    Flag = "AutoFarmMobsToggle",
 
-    Callback = function(Value)
-        autoFarmMobs = Value
+    Callback = function(val)
+        autoFarmMobs = val
+        if not val then return end
+        if not selectedQuestPart then return end
 
-        if not Value then return end
-        if not selectedQuestPart then
-            Rayfield:Notify({Title="Error",Content="Select a quest first!",Duration=4})
-            autoFarmMobs = false
-            return
-        end
-
-        Rayfield:Notify({
-            Title = "Auto Farm",
-            Content = "Farming mobs for " .. selectedQuestPart,
-            Duration = 4
-        })
+        local island = getIslandFromQuest(selectedQuestPart)
+        if not island then return end
 
         task.spawn(function()
             while autoFarmMobs do
-                local character = player.Character
-                local hrp = character and character:FindFirstChild("HumanoidRootPart")
-                local hum = character and character:FindFirstChildOfClass("Humanoid")
+                local char = player.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
 
                 if not hrp or not hum or hum.Health <= 0 then
                     task.wait(2)
                     continue
                 end
 
-                local mob = getNearestMob(hrp)
-
+                local mob = getNearestIslandMob(hrp, island)
                 if mob then
                     local mobRoot = mob:FindFirstChild("HumanoidRootPart")
                     local mobHum = mob:FindFirstChildOfClass("Humanoid")
 
                     if mobRoot and mobHum then
+                        -- TELEPORT (NO TWEEN)
                         hrp.CFrame = mobRoot.CFrame * CFrame.new(0, 0, -3)
 
-                        for i = 1, 10 do
+                        for i = 1, 12 do
                             if not autoFarmMobs or mobHum.Health <= 0 then break end
                             firetouchinterest(hrp, mobRoot, 0)
                             firetouchinterest(hrp, mobRoot, 1)
-                            task.wait(0.1)
+                            task.wait(0.08)
                         end
                     end
                 else
@@ -670,9 +611,6 @@ MainTab:CreateToggle({
 })
 
 MainTab:CreateLabel("Flow: Select Quest → Enable Auto Farm → Enable Auto Quest")
-
-
-MainTab:CreateLabel("Quest Farming: Select quest → Toggle Auto Farm Mobs")
 
 -- Create Misc Tab (paste this after your MainTab or other tabs)
 task.wait(1)
