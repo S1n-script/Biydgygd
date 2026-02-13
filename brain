@@ -470,26 +470,26 @@ MainTab:CreateToggle({
     end,
 })
 
--- Auto Farm Mobs (Integrated – TP + Kill Aura for the selected quest)
+-- Auto Farm Mobs (Integrated)
 local autoFarmMobs = false
 
--- Mob area positions (UPDATE with real coordinates from Dex Explorer!)
+-- Mob area positions (UPDATE with real coordinates!)
 local questMobAreas = {
     ["Nomek_Main_Part_1"] = Vector3.new(-5464.01, 10374.08, -3315.83),
     ["Nomek_Main_Part_2"] = Vector3.new(-4873.64, 10433.89, -3030.97),
     ["Nomek_Main_Part_3"] = Vector3.new(-5279.41, 10389.31, -3522.93),
     ["Nomek_Main_Part_4"] = Vector3.new(-4974.58, 10409.41, -3498.22),
     ["Nomek_Main_Part_5"] = Vector3.new(-5297.52, 10391.61, -3417.11),
-    ["Nomek_Main_Part_6"] = Vector3.new(0, 10, 0),     -- UPDATE
-    ["Nomek_Main_Part_7"] = Vector3.new(0, 10, 0),     -- UPDATE
-    ["Leaf Village_Main_Part_1"] = Vector3.new(0, 10, 0),   -- UPDATE
+    ["Nomek_Main_Part_6"] = Vector3.new(0, 10, 0),
+    ["Nomek_Main_Part_7"] = Vector3.new(0, 10, 0),
+    ["Leaf Village_Main_Part_1"] = Vector3.new(0, 10, 0),
     ["Leaf Village_Main_Part_2"] = Vector3.new(0, 10, 0),
     ["Leaf Village_Main_Part_3"] = Vector3.new(0, 10, 0),
     ["Leaf Village_Main_Part_4"] = Vector3.new(0, 10, 0),
     ["Leaf Village_Main_Part_5"] = Vector3.new(0, 10, 0),
     ["Leaf Village_Main_Part_6"] = Vector3.new(0, 10, 0),
     ["Leaf Village_Main_Part_7"] = Vector3.new(0, 10, 0),
-    ["Egg City_Main_Part_1"] = Vector3.new(0, 10, 0),   -- UPDATE
+    ["Egg City_Main_Part_1"] = Vector3.new(0, 10, 0),
     ["Egg City_Main_Part_2"] = Vector3.new(0, 10, 0),
     ["Egg City_Main_Part_3"] = Vector3.new(0, 10, 0),
     ["Egg City_Main_Part_4"] = Vector3.new(0, 10, 0),
@@ -498,14 +498,13 @@ local questMobAreas = {
     ["Egg City_Main_Part_7"] = Vector3.new(0, 10, 0)
 }
 
--- Keywords to identify mobs (UPDATE based on your game)
+-- Mob name keywords (UPDATE!)
 local mobKeywords = {"Mob", "Enemy", "Nomek", "Leaf", "Saiyan", "Dragon", "Villager", "Egg"}
 
-local FarmMobsToggle = MainTab:CreateToggle({
+MainTab:CreateToggle({
     Name = "Auto Farm Mobs for Selected Quest",
     CurrentValue = false,
     Flag = "AutoFarmMobsToggle",
-    
     Callback = function(Value)
         autoFarmMobs = Value
         
@@ -518,16 +517,12 @@ local FarmMobsToggle = MainTab:CreateToggle({
             
             local targetPos = questMobAreas[selectedQuestPart]
             if not targetPos or targetPos == Vector3.new(0, 10, 0) then
-                Rayfield:Notify({Title = "Error", Content = "No valid position set for " .. selectedQuestPart .. "!", Duration = 5})
+                Rayfield:Notify({Title = "Error", Content = "No position set for this quest!", Duration = 5})
                 autoFarmMobs = false
                 return
             end
             
-            Rayfield:Notify({
-                Title = "Auto Farm Mobs",
-                Content = "TP + killing mobs for " .. selectedQuestPart .. "...",
-                Duration = 5
-            })
+            Rayfield:Notify({Title = "Auto Farm", Content = "Farming mobs for " .. selectedQuestPart, Duration = 5})
             
             task.spawn(function()
                 local player = game.Players.LocalPlayer
@@ -539,12 +534,10 @@ local FarmMobsToggle = MainTab:CreateToggle({
                         local character = player.Character or player.CharacterAdded:Wait()
                         local hrp = character:WaitForChild("HumanoidRootPart")
                         
-                        -- Smooth tween to mob area
                         local tween = tweenService:Create(hrp, tweenInfo, {CFrame = CFrame.new(targetPos + Vector3.new(0, 5, 0))})
                         tween:Play()
                         tween.Completed:Wait()
                         
-                        -- Kill aura loop
                         for i = 1, 100 do
                             if not autoFarmMobs then break end
                             
@@ -568,19 +561,17 @@ local FarmMobsToggle = MainTab:CreateToggle({
                             task.wait(0.3)
                         end
                     end)
-                    
                     task.wait(2)
                 end
                 
-                Rayfield:Notify({
-                    Title = "Auto Farm Mobs",
-                    Content = "Stopped farming for " .. selectedQuestPart,
-                    Duration = 3
-                })
+                Rayfield:Notify({Title = "Auto Farm", Content = "Stopped farming " .. selectedQuestPart, Duration = 3})
             end)
         end
     end,
 })
+
+MainTab:CreateLabel("Quest Farming: Select quest → Toggle Auto Farm Mobs")
+
 -- Create Misc Tab (paste this after your MainTab or other tabs)
 task.wait(1)
 local MiscTab = Window:CreateTab("Misc", 4483362458)  -- Optional icon
