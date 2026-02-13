@@ -63,66 +63,125 @@ local ClickToggle = MainTab:CreateToggle({
     end,
 })
 
+-- =========================
+-- AUTO TITLE VARIABLES
+-- =========================
 local autoTitle = false
+
 local titleList = {
     "Adept", "Apprentice", "Amateur", "Trainee", "Novice",
     "Recruit", "Challanger", "Combatant", "Competitor", "Fighter",
     "Commander", "Warrior", "Elite Warrior", "Master"
 }
 
-local TitleToggle = MainTab:CreateToggle({
-    Name = "Auto Buy Titles",
+-- =========================
+-- SERVICES
+-- =========================
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local player = Players.LocalPlayer
+
+-- =========================
+-- TITLE BUY REMOTE
+-- =========================
+local titleRemote = ReplicatedStorage
+    :WaitForChild("Packages")
+    :WaitForChild("_Index")
+    :WaitForChild("sleitnick_knit@1.5.1")
+    :WaitForChild("knit")
+    :WaitForChild("Services")
+    :WaitForChild("TitleService")
+    :WaitForChild("RF")
+    :WaitForChild("Buy")
+
+-- =========================
+-- PLAYER DATA (CHANGE CURRENCY NAME IF NEEDED)
+-- =========================
+local function getCurrency()
+    local stats = player:FindFirstChild("leaderstats") or player:FindFirstChild("Stats")
+    if not stats then return nil end
+
+    return stats:FindFirstChild("Zeni")      -- 🔴 CHANGE IF NEEDED
+        or stats:FindFirstChild("Coins")
+        or stats:FindFirstChild("Gold")
+end
+
+-- =========================
+-- GET CURRENT TITLE INDEX
+-- =========================
+local function getCurrentTitleIndex()
+    local titleValue = player:FindFirstChild("Title")
+    if not titleValue then return 0 end
+
+    for i, name in ipairs(titleList) do
+        if name == titleValue.Value then
+            return i
+        end
+    end
+
+    return 0
+end
+
+-- =========================
+-- ATTEMPT NEXT TITLE
+-- =========================
+local function tryBuyNextTitle()
+    local currentIndex = getCurrentTitleIndex()
+    local nextTitle = titleList[currentIndex + 1]
+    if not nextTitle then return end
+
+    pcall(function()
+        titleRemote:InvokeServer(nextTitle)
+    end)
+end
+
+-- =========================
+-- AUTO TITLE TOGGLE
+-- =========================
+MainTab:CreateToggle({
+    Name = "Auto Buy Titles (Smart)",
     CurrentValue = false,
     Flag = "AutoTitleToggle",
-    
+
     Callback = function(Value)
         autoTitle = Value
-        
-        if Value then
-            Rayfield:Notify({
-                Title = "Auto Titles",
-                Content = "Atempting To Upgrade Title...",
-                Duration = 4
-            })
-            
-            task.spawn(function()
-                local remote = game:GetService("ReplicatedStorage")
-                    :WaitForChild("Packages")
-                    :WaitForChild("_Index")
-                    :WaitForChild("sleitnick_knit@1.5.1")
-                    :WaitForChild("knit")
-                    :WaitForChild("Services")
-                    :WaitForChild("TitleService")
-                    :WaitForChild("RF")
-                    :WaitForChild("Buy")
-                
-                while autoTitle do
-                    local success, err = pcall(function()
-                        for _, titleName in ipairs(titleList) do
-                            if not autoTitle then break end
-                            
-                            remote:InvokeServer(titleName)
-                            task.wait(0.4)  -- Delay per title (anti-kick / rate-limit)
-                        end
-                    end)
-                    
-                    if not success then
-                        warn("Title buy error: " .. tostring(err))
-                        -- Optional: break or notify on repeated fail
-                    end
-                    
-                    task.wait(600)  -- Delay between full cycles (all titles)
-                end
-                
-                Rayfield:Notify({
-                    Title = "Auto Titles",
-                    Content = "Stopped buying titles.",
-                    Duration = 3
-                })
-            end)
+
+        if not Value then return end
+
+        Rayfield:Notify({
+            Title = "Auto Titles",
+            Content = "Waiting for eligibility...",
+            Duration = 4
+        })
+
+        local currency = getCurrency()
+        if not currency then
+            warn("Currency stat not found")
+            return
         end
-    end,
+
+        -- 🔥 EVENT-DRIVEN (NO SPAM)
+        task.spawn(function()
+            while autoTitle do
+                local before = getCurrentTitleIndex()
+                tryBuyNextTitle()
+                task.wait(1.5)
+
+                local after = getCurrentTitleIndex()
+                if after > before then
+                    Rayfield:Notify({
+                        Title = "Title Upgraded",
+                        Content = "New title unlocked!",
+                        Duration = 3
+                    })
+                end
+
+                task.wait(2)
+            end
+        end)
+    end
 })
+
 
 local autoRankup = false
 
