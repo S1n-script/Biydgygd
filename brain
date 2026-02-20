@@ -1,1 +1,82 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
+local Window = Rayfield:CreateWindow({
+   Name = "Rayfield Example Window",
+   Icon = 0,
+   LoadingTitle = "Rayfield Interface Suite",
+   LoadingSubtitle = "by Sirius",
+   ShowText = "Rayfield",
+   Theme = "Default",
+
+   ToggleUIKeybind = "K",
+
+   DisableRayfieldPrompts = false,
+   DisableBuildWarnings = false,
+
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = nil,
+      FileName = "Big Hub"
+   },
+
+   Discord = {
+      Enabled = false,
+      Invite = "noinvitelink",
+      RememberJoins = true
+   },
+
+   KeySystem = false,
+   KeySettings = {
+      Title = "Untitled",
+      Subtitle = "Key System",
+      Note = "No method of obtaining the key is provided",
+      FileName = "Key",
+      SaveKey = true,
+      GrabKeyFromSite = false,
+      Key = {"Hello"}
+   }
+})
+
+local Tab = Window:CreateTab("Tab Example", 4483362458) -- Title, Image
+
+local autoClick = false
+
+local Toggle = Tab:CreateToggle({
+   Name = "AutoClick",
+   CurrentValue = false,
+   Flag = "AutoClickToggle",   -- fixed typo in flag name
+   
+   Callback = function(Value)
+      autoClick = Value   -- Value is already true/false from the toggle
+
+      if Value then
+         -- Start the clicking loop in a separate thread
+         task.spawn(function()
+            while autoClick do
+               local args = {
+                  {
+                     {
+                        "ClickSystem",
+                        "Execute",
+                        n = 3
+                     },
+                     "\002"
+                  }
+               }
+               
+               pcall(function()  -- protects against errors if remote is missing
+                  game:GetService("ReplicatedStorage")
+                     :WaitForChild("ffrostflame_bridgenet2@1.0.0", 5)
+                     :WaitForChild("dataRemoteEvent", 5)
+                     :FireServer(unpack(args))
+               end)
+               
+               task.wait(0.03)   -- ≈ 33 clicks/sec — adjust this value:
+                                 -- smaller = faster   (e.g. 0.01 = very fast)
+                                 -- larger = slower/safer (e.g. 0.1)
+            end
+         end)
+      end
+      -- When Value = false → loop stops automatically because autoClick = false
+   end,
+})
