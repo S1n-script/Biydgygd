@@ -39,44 +39,37 @@ local Window = Rayfield:CreateWindow({
 
 local Tab = Window:CreateTab("Tab Example", 4483362458) -- Title, Image
 
-local autoClick = false
+local autoThrow = false
 
 local Toggle = Tab:CreateToggle({
-   Name = "AutoClick",
+   Name = "AutoThrow",
    CurrentValue = false,
-   Flag = "AutoClickToggle",   -- fixed typo in flag name
+   Flag = "AutoThrowToggle",
    
    Callback = function(Value)
-      autoClick = Value   -- Value is already true/false from the toggle
+      autoThrow = Value   -- sync with the actual toggle state (true/false)
 
       if Value then
-         -- Start the clicking loop in a separate thread
+         -- Run the loop in a separate thread so it doesn't freeze the game
          task.spawn(function()
-            while autoClick do
+            while autoThrow do
                local args = {
-                  {
-                     {
-                        "ClickSystem",
-                        "Execute",
-                        n = 3
-                     },
-                     "\002"
-                  }
+                  "City"
                }
                
-               pcall(function()  -- protects against errors if remote is missing
+               -- Safe remote firing with timeout + error protection
+               pcall(function()
                   game:GetService("ReplicatedStorage")
-                     :WaitForChild("ffrostflame_bridgenet2@1.0.0", 5)
-                     :WaitForChild("dataRemoteEvent", 5)
+                     :WaitForChild("Remotes", 8)
+                     :WaitForChild("Throw", 5)
                      :FireServer(unpack(args))
                end)
                
-               task.wait(0.03)   -- ≈ 33 clicks/sec — adjust this value:
-                                 -- smaller = faster   (e.g. 0.01 = very fast)
-                                 -- larger = slower/safer (e.g. 0.1)
+               task.wait(0.08)   -- ≈ 12 throws/sec — adjust this:
+                                 -- 0.05 = faster   /   0.15 = slower & safer
             end
          end)
       end
-      -- When Value = false → loop stops automatically because autoClick = false
+      -- When toggle turned OFF → autoThrow = false → loop stops automatically
    end,
 })
