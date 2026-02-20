@@ -1,4 +1,5 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
 local Window = Rayfield:CreateWindow({
    Name = "Rayfield Example Window",
    Icon = 0, -- Icon in Topbar. Can use Lucide Icons (string) or Roblox Image (number). 0 to use no icon (default).
@@ -6,19 +7,24 @@ local Window = Rayfield:CreateWindow({
    LoadingSubtitle = "by Sirius",
    ShowText = "Rayfield", -- for mobile users to unhide Rayfield, change if you'd like
    Theme = "Default", -- Check https://docs.sirius.menu/rayfield/configuration/themes
+
    ToggleUIKeybind = "K", -- The keybind to toggle the UI visibility (string like "K" or Enum.KeyCode)
+
    DisableRayfieldPrompts = false,
    DisableBuildWarnings = false -- Prevents Rayfield from emitting warnings when the script has a version mismatch with the interface.
+
    ConfigurationSaving = {
       Enabled = true,
       FolderName = nil, -- Create a custom folder for your hub/game
       FileName = "Big Hub"
    },
+
    Discord = {
       Enabled = false, -- Prompt the user to join your Discord server if their executor supports it
       Invite = "noinvitelink", -- The Discord invite code, do not include Discord.gg/. E.g. Discord.gg/ ABCD would be ABCD
       RememberJoins = true -- Set this to false to make them join the Discord every time they load it up
    },
+
    KeySystem = false, -- Set this to true to use our key system
    KeySettings = {
       Title = "Untitled",
@@ -30,31 +36,24 @@ local Window = Rayfield:CreateWindow({
       Key = {"Hello"} -- List of keys that the system will accept, can be RAW file links (pastebin, github, etc.) or simple strings ("hello", "key22")
    }
 })
+
 local Tab = Window:CreateTab("Tab Example", 4483362458) -- Title, Image
-local autoCollect = false
+
+local autoClick = false
+
 local Toggle = Tab:CreateToggle({
-   Name = "Auto Collect",
+   Name = "AutoClick",
    CurrentValue = false,
-   Flag = "AutoCollectToggle1", -- A flag is the identifier for the configuration file; make sure every element has a different flag if you're using configuration saving to ensure no overlaps
-   Callback = function(Value)
-        autoCollect = Value
-        if Value then
-            while autoCollect do
-                local player = game.Players.LocalPlayer
-                local character = player.Character
-                if character then
-                    local hrp = character:FindFirstChild("HumanoidRootPart")
-                    if hrp then
-                        local part = game.Workspace.Plots.Places:FindFirstChild("1")
-                        if part then
-                            firetouchinterest(hrp, part, 1)
-                            task.wait(0.05)
-                            firetouchinterest(hrp, part, 0)
-                        end
-                    end
-                end
-                task.wait(0.1) -- Adjust wait time as needed to avoid spamming
+   Callback = function(value)
+      autoClick = value
+      if value then
+         task.spawn(function()
+            while autoClick do
+               local args = { { { "ClickSystem", "Execute", n = 3 }, "\002" } }
+               game:GetService("ReplicatedStorage"):WaitForChild("ffrostflame_bridgenet2@1.0.0"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args))
+               task.wait(0.001)
             end
-        end
+         end)
+      end
    end,
 })
