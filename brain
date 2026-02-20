@@ -74,54 +74,27 @@ local Toggle = Tab:CreateToggle({
    end,
 })
 
-local autoRebirth = false
+local autoTrain = false
 
-local Toggle = Tab:CreateToggle({
-   Name = "Auto Rebirth (Smart Detect)",
+local TrainToggle = Tab:CreateToggle({
+   Name = "Auto Train",
    CurrentValue = false,
-   Flag = "AutoRebirthToggle",
+   Flag = "AutoTrainToggle",
    
    Callback = function(Value)
-      autoRebirth = Value
+      autoTrain = Value
       
       if Value then
          task.spawn(function()
-            while autoRebirth do
-               -- Option 1: Fast check using leaderstats (most common & fastest)
-               local leaderstats = game.Players.LocalPlayer:WaitForChild("leaderstats", 5)
-               if leaderstats then
-                  local rebirths = leaderstats:FindFirstChild("Rebirths") or leaderstats:FindFirstChild("Rebirth")
-                  local mainStat   -- change this to your currency name!
-                  
-                  -- Pick ONE of these based on your game:
-                  --mainStat = leaderstats:FindFirstChild("Coins")     -- common
-                   mainStat = leaderstats:FindFirstChild("Cash")
-                  -- mainStat = leaderstats:FindFirstChild("Strength")
-                  -- mainStat = leaderstats:FindFirstChild("Clicks")
-                  
-                  if mainStat and rebirths then
-                     local current = mainStat.Value
-                     local rebirthsCount = rebirths.Value
-                     
-                     -- Typical rebirth cost formula (adjust this!)
-                     local cost = 1000 * (rebirthsCount + 1)          -- example: 1k, 2k, 3k...
-                     -- or: local cost = 10^(rebirthsCount + 3)       -- exponential
-                     -- or: local cost = 5000 + rebirthsCount * 2500
-                     
-                     if current >= cost then
-                        -- We can rebirth → fire once
-                        pcall(function()
-                           game:GetService("ReplicatedStorage")
-                              :WaitForChild("Remotes")
-                              :WaitForChild("Rebirth")
-                              :FireServer()
-                        end)
-                        task.wait(0.5)   -- small delay after success to let stats reset
-                     end
-                  end
-               end
-               
-               task.wait(1.2)   -- check every ~1.2 seconds (adjust: 0.6 = faster, 3 = stealthier)
+            while autoTrain do
+               pcall(function()
+                  -- Change this remote/args to match your game's train remote!
+                  game:GetService("ReplicatedStorage")
+                     :WaitForChild("Remotes")
+                     :WaitForChild("Train")  -- ← common name; check explorer
+                     :FireServer()           -- often no args needed
+               end)
+               task.wait(0.5)  -- Train usually has longer cooldown
             end
          end)
       end
