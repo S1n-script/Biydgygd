@@ -63,10 +63,7 @@ local ClickToggle = MainTab:CreateToggle({
     end,
 })
 
--- UPDATED AUTO ENEMIES for workspace.MobSpawns.Nomek
--- Simplified: no worlds, just enemy names from Nomek folder
--- Assumes same structure: BaseParts w/ 32-hex Name, "Name" attr, "Dead" attr
-
+-- Rest of your script (updated for Nomek)
 local selectedEnemyName = nil
 local nameToIdsMap = {}
 local currentTarget = nil
@@ -76,16 +73,22 @@ local function getAllEnemyNames()
     local tempMap = {}
    
     local mobSpawns = workspace:FindFirstChild("MobSpawns")
-    if not mobSpawns then return options, tempMap end
+    if not mobSpawns then 
+        Rayfield:Notify({Title = "Error", Content = "MobSpawns not found!", Duration = 3})
+        return options, tempMap 
+    end
    
     local nomekFolder = mobSpawns:FindFirstChild("Nomek")
-    if not nomekFolder then return options, tempMap end
+    if not nomekFolder then 
+        Rayfield:Notify({Title = "Error", Content = "Nomek folder not found!", Duration = 3})
+        return options, tempMap 
+    end
    
     for _, part in ipairs(nomekFolder:GetChildren()) do
         if part:IsA("BasePart") and #part.Name == 32 and part.Name:match("^%x+$") then
             local nameAttr = part:GetAttribute("Name")
             if nameAttr and type(nameAttr) == "string" and #nameAttr >= 3 then
-                local displayName = nameAttr  -- No world prefix needed
+                local displayName = nameAttr
                 if not tempMap[displayName] then
                     tempMap[displayName] = {}
                     table.insert(options, displayName)
@@ -123,16 +126,18 @@ local EnemyDropdown = Tab:CreateDropdown({
             return
         end
         selectedEnemyName = selected
+        Rayfield:Notify({Title = "Selected", Content = "Farming: " .. selected, Duration = 2, Image = 4483362458})
     end,
 })
 
 Tab:CreateButton({
-    Name = "Refresh Enemy Names",
+    Name = "🔄 Refresh Enemy Names",
     Callback = function()
         local newOptions, newMap = getAllEnemyNames()
         nameToIdsMap = newMap
         EnemyDropdown:Refresh(newOptions)
         EnemyDropdown:Set({"None"})
+        Rayfield:Notify({Title = "Refreshed", Content = (#newOptions - 1) .. " enemies found!", Duration = 3})
     end,
 })
 
@@ -179,13 +184,14 @@ local function teleportToEnemy(hrp, enemyData)
 end
 
 Tab:CreateToggle({
-    Name = "Auto Enemies",
+    Name = "🚀 Auto Enemies (Teleport)",
     CurrentValue = false,
     Flag = "AutoTeleportAllType",
     Callback = function(Value)
         getgenv().AutoTeleportAllType = Value
        
         if Value then
+            Rayfield:Notify({Title = "Started", Content = "Auto farming " .. (selectedEnemyName or "None") .. "!", Duration = 3})
             task.spawn(function()
                 local lastRefreshTime = 0
                
@@ -209,7 +215,7 @@ Tab:CreateToggle({
                     end
                    
                     local currentTime = tick()
-                    if currentTime - lastRefreshTime > 1 then
+                    if currentTime - lastRefreshTime > 2 then -- Refresh every 2s
                         local _, newMap = getAllEnemyNames()
                         nameToIdsMap = newMap
                         lastRefreshTime = currentTime
@@ -217,7 +223,7 @@ Tab:CreateToggle({
                    
                     local aliveEnemies = getAliveEnemies()
                    
-                    if currentTarget and currentTarget.part then
+                    if currentTarget and currentTarget.part and currentTarget.part.Parent then
                         local targetStillAlive = false
                         for _, enemy in ipairs(aliveEnemies) do
                             if enemy.hex == currentTarget.hex then
@@ -261,8 +267,33 @@ Tab:CreateToggle({
             end)
         else
             currentTarget = nil
+            Rayfield:Notify({Title = "Stopped", Content = "Auto farm disabled.", Duration = 2})
         end
     end,
+})
+
+Tab:CreateButton({
+    Name = "📡 Debug: Print Enemies",
+    Callback = function()
+        local nomek = workspace:FindFirstChild("MobSpawns") and workspace.MobSpawns:FindFirstChild("Nomek")
+        if nomek then
+            print("=== Nomek Enemies ===")
+            for _,p in ipairs(nomek:GetChildren()) do 
+                print(p.Name, "Name:", p:GetAttribute("Name"), "Dead:", p:GetAttribute("Dead")) 
+            end
+            Rayfield:Notify({Title = "Debug", Content = "Check console for enemies!", Duration = 4})
+        else
+            Rayfield:Notify({Title = "Error", Content = "Nomek not found!", Duration = 3})
+        end
+    end,
+})
+
+print("✅ Auto Farm Hub Loaded! Refresh enemies & toggle ON.")
+Rayfield:Notify({
+    Title = "Loaded",
+    Content = "Select enemy → Refresh if needed → Toggle Auto Enemies!",
+    Duration = 5,
+    Image = 4483362458
 })
 
 local autoReroll = false
