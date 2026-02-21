@@ -76,8 +76,6 @@ local Toggle = Tab:CreateToggle({
 
 -- Add this after your Tab is created
 
-local Tab = Window:CreateTab("Tab Example", 4483362458) -- Title, Image  
-
 local selectedTarget = "RedCore"  -- Default
 
 -- Cache remote for speed/safety
