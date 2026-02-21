@@ -63,6 +63,208 @@ local ClickToggle = MainTab:CreateToggle({
     end,
 })
 
+-- UPDATED AUTO ENEMIES for workspace.MobSpawns.Nomek
+-- Simplified: no worlds, just enemy names from Nomek folder
+-- Assumes same structure: BaseParts w/ 32-hex Name, "Name" attr, "Dead" attr
+
+local selectedEnemyName = nil
+local nameToIdsMap = {}
+local currentTarget = nil
+
+local function getAllEnemyNames()
+    local options = {"None"}
+    local tempMap = {}
+   
+    local mobSpawns = workspace:FindFirstChild("MobSpawns")
+    if not mobSpawns then return options, tempMap end
+   
+    local nomekFolder = mobSpawns:FindFirstChild("Nomek")
+    if not nomekFolder then return options, tempMap end
+   
+    for _, part in ipairs(nomekFolder:GetChildren()) do
+        if part:IsA("BasePart") and #part.Name == 32 and part.Name:match("^%x+$") then
+            local nameAttr = part:GetAttribute("Name")
+            if nameAttr and type(nameAttr) == "string" and #nameAttr >= 3 then
+                local displayName = nameAttr  -- No world prefix needed
+                if not tempMap[displayName] then
+                    tempMap[displayName] = {}
+                    table.insert(options, displayName)
+                end
+                table.insert(tempMap[displayName], part.Name)
+            end
+        end
+    end
+   
+    table.sort(options)
+    return options, tempMap
+end
+
+local function isEnemyAlive(part)
+    if not part or not part.Parent then return false end
+    local dead = part:GetAttribute("Dead")
+    if dead == true then return false end
+    return true
+end
+
+local options, initialMap = getAllEnemyNames()
+nameToIdsMap = initialMap
+
+local EnemyDropdown = Tab:CreateDropdown({
+    Name = "Select Enemy",
+    Options = options,
+    CurrentOption = {"None"},
+    MultipleOptions = false,
+    Flag = "EnemyTypeDropdown",
+    Callback = function(selectedTable)
+        local selected = selectedTable[1]
+        if selected == "None" or not selected then
+            selectedEnemyName = nil
+            currentTarget = nil
+            return
+        end
+        selectedEnemyName = selected
+    end,
+})
+
+Tab:CreateButton({
+    Name = "Refresh Enemy Names",
+    Callback = function()
+        local newOptions, newMap = getAllEnemyNames()
+        nameToIdsMap = newMap
+        EnemyDropdown:Refresh(newOptions)
+        EnemyDropdown:Set({"None"})
+    end,
+})
+
+local function getAliveEnemies()
+    if not selectedEnemyName then return {} end
+   
+    local mobSpawns = workspace:FindFirstChild("MobSpawns")
+    if not mobSpawns then return {} end
+   
+    local nomekFolder = mobSpawns:FindFirstChild("Nomek")
+    if not nomekFolder then return {} end
+   
+    local player = game.Players.LocalPlayer
+    local character = player and player.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return {} end
+   
+    local hexIds = nameToIdsMap[selectedEnemyName] or {}
+    local aliveEnemies = {}
+   
+    for _, hex in ipairs(hexIds) do
+        local part = nomekFolder:FindFirstChild(hex)
+        if part and part:IsA("BasePart") and isEnemyAlive(part) then
+            local dist = (hrp.Position - part.Position).Magnitude
+            table.insert(aliveEnemies, {
+                part = part,
+                hex = hex,
+                dist = dist
+            })
+        end
+    end
+   
+    table.sort(aliveEnemies, function(a, b) return a.dist < b.dist end)
+    return aliveEnemies
+end
+
+local function teleportToEnemy(hrp, enemyData)
+    if not hrp or not enemyData or not enemyData.part then return false end
+    if not isEnemyAlive(enemyData.part) then return false end
+   
+    local targetCFrame = enemyData.part.CFrame * CFrame.new(0, 3, -5)
+    hrp.CFrame = targetCFrame
+    return true
+end
+
+Tab:CreateToggle({
+    Name = "Auto Enemies",
+    CurrentValue = false,
+    Flag = "AutoTeleportAllType",
+    Callback = function(Value)
+        getgenv().AutoTeleportAllType = Value
+       
+        if Value then
+            task.spawn(function()
+                local lastRefreshTime = 0
+               
+                while getgenv().AutoTeleportAllType do
+                    if not selectedEnemyName then
+                        task.wait(0.3)
+                        continue
+                    end
+                   
+                    local player = game.Players.LocalPlayer
+                    local character = player.Character
+                    if not character then
+                        task.wait(0.3)
+                        continue
+                    end
+                   
+                    local hrp = character:FindFirstChild("HumanoidRootPart")
+                    if not hrp then
+                        task.wait(0.3)
+                        continue
+                    end
+                   
+                    local currentTime = tick()
+                    if currentTime - lastRefreshTime > 1 then
+                        local _, newMap = getAllEnemyNames()
+                        nameToIdsMap = newMap
+                        lastRefreshTime = currentTime
+                    end
+                   
+                    local aliveEnemies = getAliveEnemies()
+                   
+                    if currentTarget and currentTarget.part then
+                        local targetStillAlive = false
+                        for _, enemy in ipairs(aliveEnemies) do
+                            if enemy.hex == currentTarget.hex then
+                                targetStillAlive = true
+                                currentTarget = enemy
+                                break
+                            end
+                        end
+                       
+                        if not targetStillAlive then
+                            currentTarget = nil
+                        end
+                    end
+                   
+                    if not currentTarget and #aliveEnemies > 0 then
+                        currentTarget = aliveEnemies[1]
+                    end
+                   
+                    if not currentTarget then
+                        task.wait(0.5)
+                        continue
+                    end
+                   
+                    if not isEnemyAlive(currentTarget.part) then
+                        currentTarget = nil
+                        task.wait(0.1)
+                        continue
+                    end
+                   
+                    currentTarget.dist = (hrp.Position - currentTarget.part.Position).Magnitude
+                   
+                    if currentTarget.dist < 6 then
+                        task.wait(0.3)
+                    else
+                        teleportToEnemy(hrp, currentTarget)
+                        task.wait(0.2)
+                    end
+                end
+               
+                currentTarget = nil
+            end)
+        else
+            currentTarget = nil
+        end
+    end,
+})
+
 local autoReroll = false
 local selectedReroll = "Saiyan"  -- Default
 local consecutiveErrors = 0  -- Track errors for auto-stop on "out of currency"
@@ -582,216 +784,3 @@ MiscTab:CreateButton({
 
 -- Label at bottom
 MiscTab:CreateLabel("HM HUB Misc")
-
-local selectedEnemyName = nil
-local nameToIdsMap = {}
-local currentTarget = nil
-
-local function getAllEnemyNames()
-    local options = {"None"}
-    local tempMap = {}
-    
-    local enemiesFolder = workspace:FindFirstChild("_ENEMIES")
-    if not enemiesFolder then return options, tempMap end
-    
-    local serverFolder = enemiesFolder:FindFirstChild("Server")
-    if not serverFolder then return options, tempMap end
-    
-    local worlds = {
-        {num = "1", folder = serverFolder:FindFirstChild("1")},
-        {num = "2", folder = serverFolder:FindFirstChild("2")},
-        {num = "3", folder = serverFolder:FindFirstChild("3")},
-        {num = "4", folder = serverFolder:FindFirstChild("4")}
-    }
-    
-    for _, w in ipairs(worlds) do
-        if w.folder then
-            for _, part in ipairs(w.folder:GetChildren()) do
-                if part:IsA("BasePart") and #part.Name == 32 and part.Name:match("^%x+$") then
-                    local nameAttr = part:GetAttribute("Name")
-                    if nameAttr and type(nameAttr) == "string" and #nameAttr >= 3 then
-                        local displayName = "[" .. w.num .. "] " .. nameAttr
-                        if not tempMap[displayName] then
-                            tempMap[displayName] = {}
-                            table.insert(options, displayName)
-                        end
-                        table.insert(tempMap[displayName], part.Name)
-                    end
-                end
-            end
-        end
-    end
-    
-    table.sort(options)
-    return options, tempMap
-end
-
-local function isEnemyAlive(part)
-    if not part or not part.Parent then return false end
-    local dead = part:GetAttribute("Dead")
-    if dead == true then return false end
-    return true
-end
-
-local options, initialMap = getAllEnemyNames()
-nameToIdsMap = initialMap
-
-local EnemyDropdown = Tab:CreateDropdown({
-    Name = "Select Enemy",
-    Options = options,
-    CurrentOption = {"None"},
-    MultipleOptions = false,
-    Flag = "EnemyTypeDropdown",
-    Callback = function(selectedTable)
-        local selected = selectedTable[1]
-        if selected == "None" or not selected then
-            selectedEnemyName = nil
-            currentTarget = nil
-            return
-        end
-        selectedEnemyName = selected
-    end,
-})
-
-Tab:CreateButton({
-    Name = "Refresh Enemy Names",
-    Callback = function()
-        local newOptions, newMap = getAllEnemyNames()
-        nameToIdsMap = newMap
-        EnemyDropdown:Refresh(newOptions)
-        EnemyDropdown:Set({"None"})
-    end,
-})
-
-local function getAliveEnemies()
-    if not selectedEnemyName then return {} end
-    
-    local serverFolder = workspace:FindFirstChild("_ENEMIES"):FindFirstChild("Server")
-    if not serverFolder then return {} end
-    
-    local player = game.Players.LocalPlayer
-    local character = player and player.Character
-    local hrp = character and character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return {} end
-    
-    local worldFromPrefix = selectedEnemyName:match("^%[(%d)%]")
-    if not worldFromPrefix then return {} end
-    
-    local worldFolder = serverFolder:FindFirstChild(worldFromPrefix)
-    if not worldFolder then return {} end
-    
-    local hexIds = nameToIdsMap[selectedEnemyName] or {}
-    local aliveEnemies = {}
-    
-    for _, hex in ipairs(hexIds) do
-        local part = worldFolder:FindFirstChild(hex)
-        if part and part:IsA("BasePart") and isEnemyAlive(part) then
-            local dist = (hrp.Position - part.Position).Magnitude
-            table.insert(aliveEnemies, {
-                part = part,
-                hex = hex,
-                dist = dist,
-                world = worldFromPrefix
-            })
-        end
-    end
-    
-    table.sort(aliveEnemies, function(a, b) return a.dist < b.dist end)
-    return aliveEnemies
-end
-
-local function teleportToEnemy(hrp, enemyData)
-    if not hrp or not enemyData or not enemyData.part then return false end
-    if not isEnemyAlive(enemyData.part) then return false end
-    
-    local targetCFrame = enemyData.part.CFrame * CFrame.new(0, 3, -5)
-    hrp.CFrame = targetCFrame
-    return true
-end
-
-Tab:CreateToggle({
-    Name = "Auto Enemies",
-    CurrentValue = false,
-    Flag = "AutoTeleportAllType",
-    Callback = function(Value)
-        getgenv().AutoTeleportAllType = Value
-        
-        if Value then
-            task.spawn(function()
-                local lastRefreshTime = 0
-                
-                while getgenv().AutoTeleportAllType do
-                    if not selectedEnemyName then
-                        task.wait(0.3)
-                        continue
-                    end
-                    
-                    local player = game.Players.LocalPlayer
-                    local character = player.Character
-                    if not character then 
-                        task.wait(0.3)
-                        continue 
-                    end
-                    
-                    local hrp = character:FindFirstChild("HumanoidRootPart")
-                    if not hrp then 
-                        task.wait(0.3)
-                        continue 
-                    end
-                    
-                    local currentTime = tick()
-                    if currentTime - lastRefreshTime > 1 then
-                        local _, newMap = getAllEnemyNames()
-                        nameToIdsMap = newMap
-                        lastRefreshTime = currentTime
-                    end
-                    
-                    local aliveEnemies = getAliveEnemies()
-                    
-                    if currentTarget and currentTarget.part then
-                        local targetStillAlive = false
-                        for _, enemy in ipairs(aliveEnemies) do
-                            if enemy.hex == currentTarget.hex then
-                                targetStillAlive = true
-                                currentTarget = enemy
-                                break
-                            end
-                        end
-                        
-                        if not targetStillAlive then
-                            currentTarget = nil
-                        end
-                    end
-                    
-                    if not currentTarget and #aliveEnemies > 0 then
-                        currentTarget = aliveEnemies[1]
-                    end
-                    
-                    if not currentTarget then
-                        task.wait(0.5)
-                        continue
-                    end
-                    
-                    if not isEnemyAlive(currentTarget.part) then
-                        currentTarget = nil
-                        task.wait(0.1)
-                        continue
-                    end
-                    
-                    currentTarget.dist = (hrp.Position - currentTarget.part.Position).Magnitude
-                    
-                    if currentTarget.dist < 6 then
-                        task.wait(0.3)
-                    else
-                        teleportToEnemy(hrp, currentTarget)
-                        task.wait(0.2)  
-                    end
-                end
-                
-                currentTarget = nil
-            end)
-        else
-            currentTarget = nil
-        end
-    end,
-})
