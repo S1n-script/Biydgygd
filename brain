@@ -76,123 +76,55 @@ local Toggle = Tab:CreateToggle({
 
 -- Add this after your Tab is created
 
--- IMPROVED Target Detector — Now with DEBUG PRINTS & Broader Scan!
--- Paste this after your Tab is created. Check CONSOLE (F9) for "Found X targets: name1, name2..."
+local Tab = Window:CreateTab("Tab Example", 4483362458) -- Title, Image  
 
-local selectedTarget = "Bullseye Elite"  -- fallback
+local selectedTarget = "RedCore"  -- Default
 
-local TargetDropdown = Tab:CreateDropdown({
-   Name = "Select Training Target",
-   Options = {"Scanning..."},  
-   CurrentOption = {"Bullseye Elite"},  
-   Flag = "SelectedTargetDropdown",
-   
-   Callback = function(Option)
-      selectedTarget = Option[1]
-      Rayfield:Notify({
-         Title = "Target Set",
-         Content = "Training on: " .. selectedTarget,
-         Duration = 2,
-      })
-   end,
-})
+-- Cache remote for speed/safety
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TrainRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("TrainSpear")
 
--- BETTER refresh function with DEBUG & broader detection
-local function refreshTargets()
-   print("🔍 [DEBUG] Scanning workspace for targets...")
-   local targetsList = {}
-   local seen = {}
+local Dropdown = Tab:CreateDropdown({
+   Name = "Select Target & Burst Train",
+   Options = {
+      "RedCore", "TargetX", "Bullseye Elite", "CircleCraft", 
+      "PrimeTarget", "RedLine Series", "HaloMark", 
+      "BullAura", "PointForce", "AimFusion"
+   },
+   CurrentOption = {"RedCore"},
+   MultipleOptions = false,
+   Flag = "TrainTargetDropdown",
    
-   -- More possible folders (added common ones for spear games)
-   local possibleFolders = {
-      workspace:FindFirstChild("TrainingArea"),
-      workspace:FindFirstChild("Targets"),
-      workspace:FindFirstChild("Bullseye"),
-      workspace:FindFirstChild("Bullseyes"),
-      workspace:FindFirstChild("Training"),
-      workspace:FindFirstChild("Map"),
-      workspace:FindFirstChild("Arena"),
-      workspace:FindFirstChild("Areas"),
-      workspace,  -- FULL scan fallback
-   }
-   
-   local totalScanned = 0
-   for _, folder in ipairs(possibleFolders) do
-      if folder then
-         for _, obj in ipairs(folder:GetDescendants()) do
-            totalScanned += 1
-            if (obj:IsA("BasePart") or obj:IsA("Model")) and obj.Name ~= " " then
-               local name = obj.Name
-               local lowerName = name:lower()
-               
-               -- BROADER filters — catches more!
-               local isTarget = lowerName:find("bull")     -- Bullseye, Bull...
-                          or lowerName:find("target") 
-                          or lowerName:find("elite")
-                          or lowerName:find("pro")
-                          or lowerName:find("advanced")
-                          or lowerName:find("basic")
-                          or lowerName:find("dummy")
-                          or lowerName:find("x") and string.len(name) > 3  -- TargetX but not too short
-                          or string.match(name, "%u") and string.match(name, "%d+")  -- Has uppercase + numbers (e.g. Target1)
-               
-               if isTarget and not seen[name] then
-                  table.insert(targetsList, name)
-                  seen[name] = true
-                  print("✅ Found target: " .. name .. " (in " .. folder:GetFullName() .. ")")
-               end
+   Callback = function(Options)
+      selectedTarget = Options[1]  -- Single selection (table[1])
+      
+      -- Instant burst train on selected (30x super-fast)
+      task.spawn(function()
+         local successCount = 0
+         for i = 1, 30 do
+            if pcall(function()
+               TrainRemote:FireServer(selectedTarget)  -- Direct arg (no unpack needed)
+            end) then
+               successCount += 1
             end
+            task.wait(0.035)  -- ~28/sec — fast but safe
          end
-      end
-   end
-   
-   -- Sort & unique
-   table.sort(targetsList)
-   
-   -- Fallback if still empty
-   if #targetsList == 0 then
-      targetsList = {"Bullseye Elite", "Bullseye Basic", "TargetX", "Basic Target", "Advanced Target"}
-      print("❌ No targets auto-detected! Using fallbacks. Check console for scan info.")
-   end
-   
-   -- UPDATE DROPDOWN
-   TargetDropdown:Refresh(targetsList, true)
-   selectedTarget = targetsList[1]
-   
-   print("🎯 [DEBUG] FINAL: Found " .. #targetsList .. " targets: " .. table.concat(targetsList, ", "))
-   print("📊 Scanned " .. totalScanned .. " objects total.")
-end
-
--- Initial scan
-refreshTargets()
-
--- REFRESH BUTTON (hit this after loading/changing area!)
-Tab:CreateButton({
-   Name = "🔄 Refresh Targets (Check F9 Console!)",
-   Callback = function()
-      refreshTargets()
+         
+         Rayfield:Notify({
+            Title = "Burst Complete",
+            Content = "Fired " .. successCount .. "/30 on " .. selectedTarget,
+            Duration = 4,
+            Image = successCount > 0 and "check-circle" or "alert-triangle"
+         })
+      end)
    end,
 })
 
--- BONUS: Manual Textbox for custom target (if auto-detect fails)
-local ManualInput = Tab:CreateInput({
-   Name = "Custom Target Name",
-   PlaceholderText = "e.g. Bullseye Elite",
-   RemoveTextAfterFocusLost = false,
-   Callback = function(Text)
-      selectedTarget = Text
-      Rayfield:Notify({
-         Title = "Custom Set",
-         Content = "Using: " .. Text,
-         Duration = 2,
-      })
-   end,
-})
-
--- Your Auto Train (uses selectedTarget)
+-- Bonus: Auto Train Toggle (uses dropdown selection)
 local autoTrain = false
+
 local TrainToggle = Tab:CreateToggle({
-   Name = "Auto Train (Dynamic Target)",
+   Name = "Auto Train (Selected Target)",
    CurrentValue = false,
    Flag = "AutoTrainToggle",
    
@@ -203,18 +135,9 @@ local TrainToggle = Tab:CreateToggle({
          task.spawn(function()
             while autoTrain do
                pcall(function()
-                  game:GetService("ReplicatedStorage")
-                     :WaitForChild("Remotes"):WaitForChild("TrainSpear")
-                     :FireServer(selectedTarget)
+                  TrainRemote:FireServer(selectedTarget)
                end)
-               task.wait(0.45)
-            end
-         end)
-         -- Auto-refresh targets every 30s while training
-         task.spawn(function()
-            while autoTrain do
-               task.wait(30)
-               refreshTargets()
+               task.wait(0.45)  -- Balanced speed (~2/sec)
             end
          end)
       end
