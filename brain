@@ -76,98 +76,123 @@ local Toggle = Tab:CreateToggle({
 
 -- Add this after your Tab is created
 
-local selectedTarget = "Select Target"  -- default / fallback
+-- IMPROVED Target Detector — Now with DEBUG PRINTS & Broader Scan!
+-- Paste this after your Tab is created. Check CONSOLE (F9) for "Found X targets: name1, name2..."
 
--- Dropdown to pick target
+local selectedTarget = "Bullseye Elite"  -- fallback
+
 local TargetDropdown = Tab:CreateDropdown({
    Name = "Select Training Target",
-   Options = {"Loading targets..."},  -- placeholder
-   CurrentOption = {"Select Target"},  -- default shown
+   Options = {"Scanning..."},  
+   CurrentOption = {"Bullseye Elite"},  
    Flag = "SelectedTargetDropdown",
    
    Callback = function(Option)
-      selectedTarget = Option[1]  -- Rayfield dropdown gives table
+      selectedTarget = Option[1]
       Rayfield:Notify({
-         Title = "Target Updated",
-         Content = "Now training on: " .. selectedTarget,
-         Duration = 3,
+         Title = "Target Set",
+         Content = "Training on: " .. selectedTarget,
+         Duration = 2,
       })
    end,
 })
 
--- Function to refresh / find all targets
+-- BETTER refresh function with DEBUG & broader detection
 local function refreshTargets()
+   print("🔍 [DEBUG] Scanning workspace for targets...")
    local targetsList = {}
-   local seen = {}  -- avoid duplicates
+   local seen = {}
    
-   -- CHANGE THESE PATHS based on real game structure (use Dex to inspect!)
+   -- More possible folders (added common ones for spear games)
    local possibleFolders = {
       workspace:FindFirstChild("TrainingArea"),
       workspace:FindFirstChild("Targets"),
+      workspace:FindFirstChild("Bullseye"),
+      workspace:FindFirstChild("Bullseyes"),
+      workspace:FindFirstChild("Training"),
       workspace:FindFirstChild("Map"),
+      workspace:FindFirstChild("Arena"),
       workspace:FindFirstChild("Areas"),
-      workspace,  -- fallback: scan whole workspace (slower)
+      workspace,  -- FULL scan fallback
    }
    
+   local totalScanned = 0
    for _, folder in ipairs(possibleFolders) do
       if folder then
          for _, obj in ipairs(folder:GetDescendants()) do
-            -- Filter for things that look like targets
-            local name = obj.Name
-            if (obj:IsA("BasePart") or obj:IsA("Model")) 
-               and (name:lower():find("target") 
-                    or name:lower():find("bullseye") 
-                    or name:lower():find("dummy") 
-                    or name:lower():find("elite")) 
-               and not seen[name] then
-                
-               table.insert(targetsList, name)
-               seen[name] = true
+            totalScanned += 1
+            if (obj:IsA("BasePart") or obj:IsA("Model")) and obj.Name ~= " " then
+               local name = obj.Name
+               local lowerName = name:lower()
+               
+               -- BROADER filters — catches more!
+               local isTarget = lowerName:find("bull")     -- Bullseye, Bull...
+                          or lowerName:find("target") 
+                          or lowerName:find("elite")
+                          or lowerName:find("pro")
+                          or lowerName:find("advanced")
+                          or lowerName:find("basic")
+                          or lowerName:find("dummy")
+                          or lowerName:find("x") and string.len(name) > 3  -- TargetX but not too short
+                          or string.match(name, "%u") and string.match(name, "%d+")  -- Has uppercase + numbers (e.g. Target1)
+               
+               if isTarget and not seen[name] then
+                  table.insert(targetsList, name)
+                  seen[name] = true
+                  print("✅ Found target: " .. name .. " (in " .. folder:GetFullName() .. ")")
+               end
             end
          end
       end
    end
    
-   -- Sort alphabetically
+   -- Sort & unique
    table.sort(targetsList)
    
-   -- If nothing found → fallback
+   -- Fallback if still empty
    if #targetsList == 0 then
-      targetsList = {"Bullseye Elite", "TargetX", "Basic Target"}  -- add known ones
+      targetsList = {"Bullseye Elite", "Bullseye Basic", "TargetX", "Basic Target", "Advanced Target"}
+      print("❌ No targets auto-detected! Using fallbacks. Check console for scan info.")
    end
    
-   -- Update dropdown options
-   TargetDropdown:Refresh(targetsList, true)  -- true = reset to first option
+   -- UPDATE DROPDOWN
+   TargetDropdown:Refresh(targetsList, true)
+   selectedTarget = targetsList[1]
    
-   -- Optional: auto-select first one
-   if #targetsList > 0 then
-      selectedTarget = targetsList[1]
-   end
-   
-   print("Found " .. #targetsList .. " possible targets!")
+   print("🎯 [DEBUG] FINAL: Found " .. #targetsList .. " targets: " .. table.concat(targetsList, ", "))
+   print("📊 Scanned " .. totalScanned .. " objects total.")
 end
 
--- Run once on load + optional refresh button
+-- Initial scan
 refreshTargets()
 
--- Optional: Add a refresh button
+-- REFRESH BUTTON (hit this after loading/changing area!)
 Tab:CreateButton({
-   Name = "Refresh Target List",
+   Name = "🔄 Refresh Targets (Check F9 Console!)",
    Callback = function()
       refreshTargets()
+   end,
+})
+
+-- BONUS: Manual Textbox for custom target (if auto-detect fails)
+local ManualInput = Tab:CreateInput({
+   Name = "Custom Target Name",
+   PlaceholderText = "e.g. Bullseye Elite",
+   RemoveTextAfterFocusLost = false,
+   Callback = function(Text)
+      selectedTarget = Text
       Rayfield:Notify({
-         Title = "Refreshed",
-         Content = "Scanned for new targets!",
-         Duration = 2.5,
+         Title = "Custom Set",
+         Content = "Using: " .. Text,
+         Duration = 2,
       })
    end,
 })
 
--- Example: Your Auto Train toggle using the selected target
+-- Your Auto Train (uses selectedTarget)
 local autoTrain = false
-
 local TrainToggle = Tab:CreateToggle({
-   Name = "Auto Train (Selected Target)",
+   Name = "Auto Train (Dynamic Target)",
    CurrentValue = false,
    Flag = "AutoTrainToggle",
    
@@ -178,13 +203,18 @@ local TrainToggle = Tab:CreateToggle({
          task.spawn(function()
             while autoTrain do
                pcall(function()
-                  local Remotes = game:GetService("ReplicatedStorage"):WaitForChild("Remotes", 8)
-                  local TrainSpear = Remotes:WaitForChild("TrainSpear", 5)
-                  
-                  TrainSpear:FireServer(selectedTarget)  -- uses whatever is picked
+                  game:GetService("ReplicatedStorage")
+                     :WaitForChild("Remotes"):WaitForChild("TrainSpear")
+                     :FireServer(selectedTarget)
                end)
-               
-               task.wait(0.45)  -- adjust cooldown/speed
+               task.wait(0.45)
+            end
+         end)
+         -- Auto-refresh targets every 30s while training
+         task.spawn(function()
+            while autoTrain do
+               task.wait(30)
+               refreshTargets()
             end
          end)
       end
