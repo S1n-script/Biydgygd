@@ -77,9 +77,9 @@ local Toggle = Tab:CreateToggle({
 local autoTrain = false
 
 local TrainToggle = Tab:CreateToggle({
-   Name = "Auto Train",
+   Name = "Auto Train - Smart Target Detect",
    CurrentValue = false,
-   Flag = "AutoTrainToggle",
+   Flag = "SmartAutoTrainToggle",
    
    Callback = function(Value)
       autoTrain = Value
@@ -87,14 +87,58 @@ local TrainToggle = Tab:CreateToggle({
       if Value then
          task.spawn(function()
             while autoTrain do
-               pcall(function()
-                  -- Change this remote/args to match your game's train remote!
-                  game:GetService("ReplicatedStorage")
-                     :WaitForChild("Remotes")
-                     :WaitForChild("Train")  -- ← common name; check explorer
-                     :FireServer()           -- often no args needed
-               end)
-               task.wait(0.5)  -- Train usually has longer cooldown
+               local bestTarget = nil
+               local bestScore = 0  -- We'll score targets higher = better
+               
+               -- CHANGE THIS PATH to where targets actually are in the game
+               -- Common spots: Workspace.TrainingArea, Workspace.Targets, Workspace.Map.Targets etc.
+               local targetFolder = workspace:FindFirstChild("TrainingArea") 
+                                 or workspace:FindFirstChild("Targets") 
+                                 or workspace  -- fallback: scan whole workspace (slow)
+               
+               if targetFolder then
+                  for _, obj in ipairs(targetFolder:GetDescendants()) do
+                     if obj:IsA("BasePart") or obj:IsA("Model") then
+                        local name = obj.Name:lower()
+                        
+                        -- Score based on name keywords (adjust these based on what you see in-game!)
+                        local score = 0
+                        if name:find("targetx") or name:find("x") then score = score + 10 end
+                        if name:find("advanced") or name:find("mythic") then score = score + 30 end
+                        if name:find("legendary") or name:find("boss") then score = score + 50 end
+                        if name:find("far") or name:find("end") then score = score + 20 end  -- farther usually better
+                        
+                        -- Bonus: distance from player (farther = often better in these games)
+                        local playerPos = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character.PrimaryPart.Position
+                        if playerPos and obj:IsA("BasePart") then
+                           local dist = (obj.Position - playerPos).Magnitude
+                           if dist > 100 then score = score + math.floor(dist / 50) end  -- farther = higher score
+                        end
+                        
+                        if score > bestScore then
+                           bestScore = score
+                           bestTarget = obj.Name  -- We send the NAME as arg (assuming game uses target name)
+                        end
+                     end
+                  end
+               end
+               
+               if bestTarget then
+                  pcall(function()
+                     local Remotes = game:GetService("ReplicatedStorage"):WaitForChild("Remotes", 8)
+                     local TrainSpear = Remotes:WaitForChild("TrainSpear", 5)
+                     
+                     TrainSpear:FireServer(bestTarget)  -- Fire with detected best name
+                     -- print("Throwing at best target: " .. bestTarget .. " (score: " .. bestScore .. ")")
+                  end)
+               else
+                  -- Fallback to "TargetX" if nothing found
+                  pcall(function()
+                     game:GetService("ReplicatedStorage").Remotes.TrainSpear:FireServer("TargetX")
+                  end)
+               end
+               
+               task.wait(0.5)  -- Check + throw every 0.5s (adjust: 0.3 faster, 1.0 stealthier)
             end
          end)
       end
