@@ -74,12 +74,102 @@ local Toggle = Tab:CreateToggle({
    end,
 })
 
+-- Add this after your Tab is created
+
+local selectedTarget = "Select Target"  -- default / fallback
+
+-- Dropdown to pick target
+local TargetDropdown = Tab:CreateDropdown({
+   Name = "Select Training Target",
+   Options = {"Loading targets..."},  -- placeholder
+   CurrentOption = {"Select Target"},  -- default shown
+   Flag = "SelectedTargetDropdown",
+   
+   Callback = function(Option)
+      selectedTarget = Option[1]  -- Rayfield dropdown gives table
+      Rayfield:Notify({
+         Title = "Target Updated",
+         Content = "Now training on: " .. selectedTarget,
+         Duration = 3,
+      })
+   end,
+})
+
+-- Function to refresh / find all targets
+local function refreshTargets()
+   local targetsList = {}
+   local seen = {}  -- avoid duplicates
+   
+   -- CHANGE THESE PATHS based on real game structure (use Dex to inspect!)
+   local possibleFolders = {
+      workspace:FindFirstChild("TrainingArea"),
+      workspace:FindFirstChild("Targets"),
+      workspace:FindFirstChild("Map"),
+      workspace:FindFirstChild("Areas"),
+      workspace,  -- fallback: scan whole workspace (slower)
+   }
+   
+   for _, folder in ipairs(possibleFolders) do
+      if folder then
+         for _, obj in ipairs(folder:GetDescendants()) do
+            -- Filter for things that look like targets
+            local name = obj.Name
+            if (obj:IsA("BasePart") or obj:IsA("Model")) 
+               and (name:lower():find("target") 
+                    or name:lower():find("bullseye") 
+                    or name:lower():find("dummy") 
+                    or name:lower():find("elite")) 
+               and not seen[name] then
+                
+               table.insert(targetsList, name)
+               seen[name] = true
+            end
+         end
+      end
+   end
+   
+   -- Sort alphabetically
+   table.sort(targetsList)
+   
+   -- If nothing found → fallback
+   if #targetsList == 0 then
+      targetsList = {"Bullseye Elite", "TargetX", "Basic Target"}  -- add known ones
+   end
+   
+   -- Update dropdown options
+   TargetDropdown:Refresh(targetsList, true)  -- true = reset to first option
+   
+   -- Optional: auto-select first one
+   if #targetsList > 0 then
+      selectedTarget = targetsList[1]
+   end
+   
+   print("Found " .. #targetsList .. " possible targets!")
+end
+
+-- Run once on load + optional refresh button
+refreshTargets()
+
+-- Optional: Add a refresh button
+Tab:CreateButton({
+   Name = "Refresh Target List",
+   Callback = function()
+      refreshTargets()
+      Rayfield:Notify({
+         Title = "Refreshed",
+         Content = "Scanned for new targets!",
+         Duration = 2.5,
+      })
+   end,
+})
+
+-- Example: Your Auto Train toggle using the selected target
 local autoTrain = false
 
 local TrainToggle = Tab:CreateToggle({
-   Name = "Auto Train - Smart Target Detect",
+   Name = "Auto Train (Selected Target)",
    CurrentValue = false,
-   Flag = "SmartAutoTrainToggle",
+   Flag = "AutoTrainToggle",
    
    Callback = function(Value)
       autoTrain = Value
@@ -87,58 +177,14 @@ local TrainToggle = Tab:CreateToggle({
       if Value then
          task.spawn(function()
             while autoTrain do
-               local bestTarget = nil
-               local bestScore = 0  -- We'll score targets higher = better
+               pcall(function()
+                  local Remotes = game:GetService("ReplicatedStorage"):WaitForChild("Remotes", 8)
+                  local TrainSpear = Remotes:WaitForChild("TrainSpear", 5)
+                  
+                  TrainSpear:FireServer(selectedTarget)  -- uses whatever is picked
+               end)
                
-               -- CHANGE THIS PATH to where targets actually are in the game
-               -- Common spots: Workspace.TrainingArea, Workspace.Targets, Workspace.Map.Targets etc.
-               local targetFolder = workspace:FindFirstChild("TrainingArea") 
-                                 or workspace:FindFirstChild("Targets") 
-                                 or workspace  -- fallback: scan whole workspace (slow)
-               
-               if targetFolder then
-                  for _, obj in ipairs(targetFolder:GetDescendants()) do
-                     if obj:IsA("BasePart") or obj:IsA("Model") then
-                        local name = obj.Name:lower()
-                        
-                        -- Score based on name keywords (adjust these based on what you see in-game!)
-                        local score = 0
-                        if name:find("targetx") or name:find("x") then score = score + 10 end
-                        if name:find("advanced") or name:find("mythic") then score = score + 30 end
-                        if name:find("legendary") or name:find("boss") then score = score + 50 end
-                        if name:find("far") or name:find("end") then score = score + 20 end  -- farther usually better
-                        
-                        -- Bonus: distance from player (farther = often better in these games)
-                        local playerPos = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character.PrimaryPart.Position
-                        if playerPos and obj:IsA("BasePart") then
-                           local dist = (obj.Position - playerPos).Magnitude
-                           if dist > 100 then score = score + math.floor(dist / 50) end  -- farther = higher score
-                        end
-                        
-                        if score > bestScore then
-                           bestScore = score
-                           bestTarget = obj.Name  -- We send the NAME as arg (assuming game uses target name)
-                        end
-                     end
-                  end
-               end
-               
-               if bestTarget then
-                  pcall(function()
-                     local Remotes = game:GetService("ReplicatedStorage"):WaitForChild("Remotes", 8)
-                     local TrainSpear = Remotes:WaitForChild("TrainSpear", 5)
-                     
-                     TrainSpear:FireServer(bestTarget)  -- Fire with detected best name
-                     -- print("Throwing at best target: " .. bestTarget .. " (score: " .. bestScore .. ")")
-                  end)
-               else
-                  -- Fallback to "TargetX" if nothing found
-                  pcall(function()
-                     game:GetService("ReplicatedStorage").Remotes.TrainSpear:FireServer("TargetX")
-                  end)
-               end
-               
-               task.wait(0.5)  -- Check + throw every 0.5s (adjust: 0.3 faster, 1.0 stealthier)
+               task.wait(0.45)  -- adjust cooldown/speed
             end
          end)
       end
