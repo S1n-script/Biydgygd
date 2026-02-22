@@ -587,24 +587,54 @@ task.wait(1)
 local Tab = Window:CreateTab("Auto Quest", 4483362458) -- Title, Image
 
 
+-- Make sure Rayfield is already loaded earlier in your script, e.g.:
+-- local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+-- Assuming you already have your Window and Tab created, e.g.:
+-- local Window = Rayfield:CreateWindow({...})
+-- local Tab = Window:CreateTab("Mob Spawns", ...)
+
+-- Get the folder
+local nomekFolder = workspace:WaitForChild("MobSpawns"):WaitForChild("Nomek")
+
+-- Collect all child names into a table
+local spawnOptions = {}
+for _, child in ipairs(nomekFolder:GetChildren()) do
+    table.insert(spawnOptions, child.Name)
+end
+
+-- Sort alphabetically (optional but nicer)
+table.sort(spawnOptions)
+
+-- Create the dropdown
 local Dropdown = Tab:CreateDropdown({
-    Name = "Select Mob Spawn",
-    Options = {"Nomek", "Goku", "Vegeta", "Frieza"},
-    CurrentOption = {"Nomek"},
+    Name = "Select Foe",
+    Options = spawnOptions,               -- ← dynamically filled with folder children names
+    CurrentOption = {},                   -- empty table = no default selected (or set {"Cell_1"} if you want)
     MultipleOptions = false,
-    Flag = "SelectedSpawn",
-    Callback = function(Option)
-        warn("Spawn selected → " .. Option)
+    Flag = "SelectedNomekFoe",          -- unique for saving config if you use it
+    Callback = function(Option)           -- Option is a string (the selected name)
+        print("Selected spawn:", Option)
         
-        local target = workspace.MobSpawns:FindFirstChild(Option)
+        -- Find the actual part/model and teleport (example)
+        local target = nomekFolder:FindFirstChild(Option)
         if target then
-            local hrp = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                hrp.CFrame = target.CFrame + Vector3.new(0, 3, 0)
+            local player = game.Players.LocalPlayer
+            local character = player.Character
+            if character then
+                local hrp = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChildWhichIsA("BasePart")
+                if hrp then
+                    -- Teleport slightly above the spawn point
+                    hrp.CFrame = target.CFrame + Vector3.new(0, 5, 0)
+                    -- Alternative: hrp.CFrame = CFrame.new(target.Position + Vector3.new(0, 5, 0))
+                    print("Teleported to:", Option)
+                end
             end
+        else
+            warn("Spawn not found:", Option)
         end
     end,
 })
 
--- Optional: Load saved config at end of script
-Rayfield:LoadConfiguration()
+-- Optional: If the folder can change during gameplay, you can refresh later:
+-- Dropdown:Refresh(newOptionsTable, true)  -- true = clear old options first
