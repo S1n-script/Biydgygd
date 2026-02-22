@@ -587,54 +587,85 @@ task.wait(1)
 local Tab = Window:CreateTab("Auto Quest", 4483362458) -- Title, Image
 
 
--- Make sure Rayfield is already loaded earlier in your script, e.g.:
--- local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+-- Assuming Rayfield is loaded and you have Window + Tab already
 
--- Assuming you already have your Window and Tab created, e.g.:
--- local Window = Rayfield:CreateWindow({...})
--- local Tab = Window:CreateTab("Mob Spawns", ...)
-
--- Get the folder
 local nomekFolder = workspace:WaitForChild("MobSpawns"):WaitForChild("Nomek")
 
--- Collect all child names into a table
-local spawnOptions = {}
+-- Step 1: Collect unique base names (strip _number suffix)
+local baseNamesSet = {}
+local spawnMap = {}  -- baseName → actual child instance (we'll use the first match)
+
 for _, child in ipairs(nomekFolder:GetChildren()) do
-    table.insert(spawnOptions, child.Name)
+    local fullName = child.Name
+    -- Remove trailing _ followed by number (e.g. Cell_1 → Cell, Goku_42 → Goku)
+    local baseName = fullName:gsub("_%d+$", "")   -- %d+ = one or more digits, $ = end of string
+    
+    if baseName ~= "" then
+        if not baseNamesSet[baseName] then
+            baseNamesSet[baseName] = true
+            spawnMap[baseName] = child  -- store first occurrence
+        end
+        -- Optional: if you want the LAST one instead, just do: spawnMap[baseName] = child
+    end
 end
 
--- Sort alphabetically (optional but nicer)
+-- Convert set → sorted list for dropdown
+local spawnOptions = {}
+for name in pairs(baseNamesSet) do
+    table.insert(spawnOptions, name)
+end
 table.sort(spawnOptions)
 
--- Create the dropdown
+-- Fallback if folder is empty
+if #spawnOptions == 0 then
+    table.insert(spawnOptions, "No spawns found")
+end
+
+-- Step 2: Create the dropdown with clean base names
 local Dropdown = Tab:CreateDropdown({
-    Name = "Select Foe",
-    Options = spawnOptions,               -- ← dynamically filled with folder children names
-    CurrentOption = {},                   -- empty table = no default selected (or set {"Cell_1"} if you want)
+    Name = "Select Nomek Mob Type",
+    Options = spawnOptions,
+    CurrentOption = {},                   -- no default, or set {"Cell"} if preferred
     MultipleOptions = false,
-    Flag = "SelectedNomekFoe",          -- unique for saving config if you use it
-    Callback = function(Option)           -- Option is a string (the selected name)
-        print("Selected spawn:", Option)
+    Flag = "SelectedNomekMobType",
+    Callback = function(selectedBaseName)
+        print("Selected mob type:", selectedBaseName)
         
-        -- Find the actual part/model and teleport (example)
-        local target = nomekFolder:FindFirstChild(Option)
+        -- Find a matching spawn (using the stored first match, or search again)
+        local target = spawnMap[selectedBaseName]
+        
+        -- Alternative: always search fresh in case folder changed
+        -- local target = nomekFolder:FindFirstChildWhichIsA("Instance", true) -- waitForChild not needed here
+        -- if not target then
+        --     for _, child in ipairs(nomekFolder:GetChildren()) do
+        --         if child.Name:match("^" .. selectedBaseName .. "(_%d+)?$") then
+        --             target = child
+        --             break
+        --         end
+        --     end
+        -- end
+        
         if target then
             local player = game.Players.LocalPlayer
             local character = player.Character
             if character then
-                local hrp = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChildWhichIsA("BasePart")
-                if hrp then
-                    -- Teleport slightly above the spawn point
-                    hrp.CFrame = target.CFrame + Vector3.new(0, 5, 0)
-                    -- Alternative: hrp.CFrame = CFrame.new(target.Position + Vector3.new(0, 5, 0))
-                    print("Teleported to:", Option)
+                local root = character:FindFirstChild("HumanoidRootPart") 
+                    or character:FindFirstChildWhichIsA("BasePart")
+                
+                if root then
+                    -- Teleport slightly above
+                    root.CFrame = target.CFrame + Vector3.new(0, 5, 0)
+                    print("Teleported to:", target.Name, "(type:", selectedBaseName, ")")
+                else
+                    warn("No root part found in character")
                 end
+            else
+                warn("Character not loaded yet")
             end
         else
-            warn("Spawn not found:", Option)
+            warn("No matching spawn found for:", selectedBaseName)
         end
     end,
 })
 
--- Optional: If the folder can change during gameplay, you can refresh later:
--- Dropdown:Refresh(newOptionsTable, true)  -- true = clear old options first
+print("Dropdown created with", #spawnOptions, "mob types")
