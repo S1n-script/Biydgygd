@@ -586,18 +586,15 @@ MiscTab:CreateLabel("HM HUB Misc")
 task.wait(1)
 local Tab = Window:CreateTab("Auto Quest", 4483362458) -- Title, Image
 
--- === COMPLETE NOMEEK MOB FARMER (Rayfield) ===
+-- === COMPLETE NOMEEK MOB FARMER (Rayfield) - FIXED ===
 -- Paste this after loading Rayfield & creating Window/Tab
--- e.g.: local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
--- local Window = Rayfield:CreateWindow({Name = "Nomek Farmer", ...})
--- local Tab = Window:CreateTab("Farming", 4483362458)
 
 local nomekFolder = workspace:WaitForChild("MobSpawns"):WaitForChild("Nomek")
 
 -- Farm state variables
 local autoFarmEnabled = false
 local farmDelay = 4
-local currentTargetBaseName = nil
+local currentTargetBaseName = nil   -- will be a STRING now
 
 -- Step 1: Collect unique base names (strip _number suffix)
 local function getBaseNames()
@@ -622,13 +619,15 @@ end
 
 -- Helper: Teleport to a matching mob spawn
 local function teleportToMob(baseName)
-    if not baseName or baseName == "No spawns found" then return end
+    if not baseName or baseName == "No spawns found" or type(baseName) ~= "string" then
+        return false
+    end
     
     local target = nil
     for _, child in ipairs(nomekFolder:GetChildren()) do
         if child.Name:match("^" .. baseName .. "(_%d+)?$") then
             target = child
-            break  -- First match (change to collect all for random if wanted)
+            break  -- First match
         end
     end
     
@@ -645,21 +644,23 @@ local function teleportToMob(baseName)
     return false
 end
 
--- Farm loop
+-- Farm loop using Heartbeat (smooth, no wait lag)
 local farmConnection
 local function startFarmLoop()
     if farmConnection then farmConnection:Disconnect() end
+    
     farmConnection = game:GetService("RunService").Heartbeat:Connect(function()
         if not autoFarmEnabled then return end
         if currentTargetBaseName and game.Players.LocalPlayer.Character then
             teleportToMob(currentTargetBaseName)
+            task.wait(farmDelay)  -- delay inside loop to avoid spamming
         end
     end)
 end
 
--- Handle character respawn (restart farm if enabled)
+-- Handle character respawn
 game.Players.LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(3)  -- Wait for full load
+    task.wait(3)
     if autoFarmEnabled and currentTargetBaseName then
         task.wait(1)
         teleportToMob(currentTargetBaseName)
@@ -676,14 +677,18 @@ local Dropdown = Tab:CreateDropdown({
     MultipleOptions = false,
     Flag = "SelectedNomekMobType",
     Callback = function(Option)
-        currentTargetBaseName = Option
-        print("Target set:", Option)
-        if autoFarmEnabled then
-            Rayfield:Notify({
-                Title = "Target Updated",
-                Content = "Now farming: " .. Option,
-                Duration = 3,
-            })
+        -- FIX: Rayfield passes table even for single select → take first value
+        currentTargetBaseName = Option and Option[1]
+        
+        if currentTargetBaseName then
+            print("Target set:", currentTargetBaseName)
+            if autoFarmEnabled then
+                Rayfield:Notify({
+                    Title = "Target Updated",
+                    Content = "Now farming: " .. currentTargetBaseName,
+                    Duration = 3,
+                })
+            end
         end
     end,
 })
@@ -744,7 +749,7 @@ Tab:CreateButton({
             if success then
                 Rayfield:Notify({Title = "TP Success!", Duration = 2})
             else
-                Rayfield:Notify({Title = "TP Failed (no char?)", Duration = 3})
+                Rayfield:Notify({Title = "TP Failed (no char/spawn?)", Duration = 3})
             end
         else
             Rayfield:Notify({Title = "No target selected!", Duration = 3})
@@ -752,7 +757,7 @@ Tab:CreateButton({
     end,
 })
 
--- Optional: Refresh button (if spawns change)
+-- Refresh button (if spawns change during game)
 Tab:CreateButton({
     Name = "Refresh Dropdown",
     Callback = function()
@@ -762,7 +767,7 @@ Tab:CreateButton({
     end,
 })
 
--- Load config (at end of script)
+-- Load saved config (good practice)
 Rayfield:LoadConfiguration()
 
-print("=== Nomek Farmer Loaded ===")
+print("=== Nomek Farmer (Fixed) Loaded ===")
