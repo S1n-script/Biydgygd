@@ -586,119 +586,112 @@ MiscTab:CreateLabel("HM HUB Misc")
 task.wait(1)
 local Tab = Window:CreateTab("Auto Quest", 4483362458) -- Title, Image
 
--- === ANIME DESTROYERS NOMEEK FARMER - NO HRP FIX (PivotTo + Dynamic Root) ===
--- FIXED FOR CUSTOM CHARACTERS WITHOUT HumanoidRootPart
--- Paste AFTER Rayfield Window/Tab creation
+-- === ANIME DESTROYERS NAMEK FARMER - DIAGNOSTIC + FLEXIBLE PATH ===
+-- Run this → check F9 console for REAL folder/child names
 
-local nomekFolder = workspace:WaitForChild("MobSpawns"):WaitForChild("Nomek")
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
--- State
-local autoFarmEnabled = false
-local farmDelay = 4
-local currentTargetBaseName = nil
-local StatusLabel = nil
+-- Possible folder paths (game might use different casing/spelling)
+local possibleFolders = {
+    workspace:FindFirstChild("MobSpawns") and workspace.MobSpawns:FindFirstChild("Nomek"),
+    workspace:FindFirstChild("MobSpawns") and workspace.MobSpawns:FindFirstChild("Namek"),
+    workspace:FindFirstChild("Mobs") and workspace.Mobs:FindFirstChild("Namek"),
+    workspace:FindFirstChild("Enemies") and workspace.Enemies:FindFirstChild("Namek"),
+    workspace:FindFirstChild("Worlds") and workspace.Worlds:FindFirstChild("Namek") and workspace.Worlds.Namek:FindFirstChild("Mobs"),
+    workspace:FindFirstChild("Spawns") and workspace.Spawns:FindFirstChild("Namek"),
+}
 
--- Get clean base names
+local nomekFolder = nil
+for _, folder in possibleFolders do
+    if folder and #folder:GetChildren() > 0 then
+        nomekFolder = folder
+        print("[DEBUG] Found mob folder at:", folder:GetFullName())
+        break
+    end
+end
+
+if not nomekFolder then
+    print("[ERROR] No Namek/Nomek folder found! Check if world unlocked. Possible paths printed above.")
+    nomekFolder = workspace  -- fallback to avoid crash, but won't work
+end
+
+-- State vars...
+local autoFarmEnabled = false
+local farmDelay = 5
+local currentTargetBaseName = nil
+local StatusLabel = Tab:CreateLabel("Status: Refresh to scan mobs")
+
+-- Get base names + PRINT ALL REAL CHILD NAMES for debug
 local function getBaseNames()
     local baseNamesSet = {}
-    for _, child in nomekFolder:GetChildren() do
-        local baseName = child.Name:gsub("_%d+$", "")
-        if baseName ~= "" then baseNamesSet[baseName] = true end
+    local allNames = {}
+    for _, child in ipairs(nomekFolder:GetChildren()) do
+        table.insert(allNames, child.Name)
+        local baseName = child.Name:gsub("_%d+$", ""):gsub("%s*%b()$", ""):match("^%s*(.-)%s*$") or child.Name  -- strip _num, (clone), trim spaces
+        if baseName ~= "" then
+            baseNamesSet[baseName] = true
+        end
     end
+    
+    -- DEBUG: Dump real names to console
+    print("[DEBUG] Real child names in folder (" .. nomekFolder:GetFullName() .. "):")
+    for _, name in ipairs(allNames) do
+        print("  - " .. name)
+    end
+    if #allNames == 0 then
+        print("[DEBUG] Folder empty! Unlock Namek world or wait for spawns.")
+    end
+    
     local options = {}
     for name in pairs(baseNamesSet) do table.insert(options, name) end
     table.sort(options)
-    if #options == 0 then table.insert(options, "No spawns") end
+    if #options == 0 then table.insert(options, "No mobs detected") end
     return options
 end
 
--- Get CFrame from mob Part (simple since they're Parts)
-local function getMobCFrame(target)
-    return target.CFrame  -- Direct for Parts
-end
-
--- DYNAMIC ROOT PART FINDER (no HRP needed!)
-local function getCharacterRoot(char)
-    -- Common custom char roots
-    return char:FindFirstChild("Torso") 
-        or char:FindFirstChild("UpperTorso") 
-        or char:FindFirstChild("LowerTorso")
-        or char:FindFirstChildWhichIsA("BasePart")  -- Any part as fallback
-        or char.PrimaryPart
-end
-
--- ULTRA-RELIABLE TP (PivotTo first, then root CFrame, then MoveTo)
+-- Teleport function (same as before, but with debug)
 local function teleportToMob(baseName)
-    print("[DEBUG] TP called for:", baseName)  -- ALWAYS prints now
-    
-    if not baseName or baseName == "No spawns" then 
-        print("[DEBUG] Invalid baseName")
-        return false 
-    end
+    print("[DEBUG] TP attempt for base:", baseName)
+    if not baseName or baseName:find("No mobs") then return false end
     
     local target = nil
-    for _, child in nomekFolder:GetChildren() do
-        if child.Name:match("^" .. baseName .. "(_%d+)?$") then
+    for _, child in ipairs(nomekFolder:GetChildren()) do
+        local nameLower = child.Name:lower()
+        local baseLower = baseName:lower()
+        if nameLower:find(baseLower) or nameLower:match("^" .. baseLower .. ".*") then  -- looser match
             target = child
+            print("[DEBUG] Matched target:", child.Name)
             break
         end
     end
-    if not target then 
-        print("[DEBUG] No target found")
-        return false 
+    
+    if not target then
+        print("[DEBUG] No match found for:", baseName)
+        return false
     end
     
-    local mobCFrame = getMobCFrame(target)
-    print("[DEBUG] Mob CFrame:", mobCFrame.Position)
-    
+    local mobCFrame = target.CFrame  -- Parts only
     local char = player.Character
-    if not char or not char.Parent then 
-        print("[DEBUG] No character")
-        return false 
-    end
+    if not char then return false end
     
-    print("[DEBUG] Char found:", char.Name)
-    
-    -- METHOD 1: PivotTo (BEST for custom chars - moves whole model)
-    local tpCFrame = mobCFrame * CFrame.new(math.random(-4,4)/10, 8, -5)  -- Front + up + tiny random
-    local success1 = pcall(function()
-        char:PivotTo(tpCFrame)
-    end)
-    print("[DEBUG] PivotTo success:", success1)
-    
-    if success1 then
-        print("[DEBUG] TP SUCCESS via PivotTo to", target.Name)
-        if StatusLabel then StatusLabel:Set("TP OK: " .. target.Name) end
-        return true
-    end
-    
-    -- METHOD 2: Set dynamic root CFrame
-    local root = getCharacterRoot(char)
+    local root = char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso") or char:FindFirstChildWhichIsA("BasePart")
     if root then
-        local success2 = pcall(function()
-            root.CFrame = tpCFrame
+        local success = pcall(function()
+            char:PivotTo(mobCFrame * CFrame.new(0, 8, -6))
         end)
-        print("[DEBUG] Root CFrame success:", success2, "Root:", root.Name)
-        if success2 then
-            if StatusLabel then StatusLabel:Set("TP OK: " .. target.Name .. " (Root)") end
+        print("[DEBUG] PivotTo success:", success)
+        if success then
+            StatusLabel:Set("TP OK: " .. target.Name)
             return true
         end
-    else
-        print("[DEBUG] No root part found!")
     end
     
-    -- METHOD 3: MoveTo fallback (walks there)
-    local success3 = pcall(function()
-        char:MoveTo(tpCFrame.Position)
-    end)
-    print("[DEBUG] MoveTo success:", success3)
-    if StatusLabel then StatusLabel:Set("Walking to: " .. target.Name) end
-    return success3
+    print("[DEBUG] TP failed - no root or PivotTo error")
+    return false
 end
 
--- Farm loop
+-- Farm loop...
 local farmThread
 local function startFarmLoop()
     if farmThread then task.cancel(farmThread) end
@@ -710,17 +703,9 @@ local function startFarmLoop()
     end)
 end
 
--- Respawn auto-TP
-player.CharacterAdded:Connect(function()
-    task.wait(5)  -- Extra wait for custom char load
-    if autoFarmEnabled then teleportToMob(currentTargetBaseName) end
-end)
-
--- === UI (Exact Rayfield Syntax) ===
-StatusLabel = Tab:CreateLabel("Status: Ready - Click Refresh")
-
+-- UI
 local Dropdown = Tab:CreateDropdown({
-    Name = "Select Mob Type",
+    Name = "Select Mob (Refresh First)",
     Options = getBaseNames(),
     CurrentOption = {},
     MultipleOptions = false,
@@ -728,70 +713,64 @@ local Dropdown = Tab:CreateDropdown({
     Callback = function(Option)
         currentTargetBaseName = Option[1]
         if currentTargetBaseName then
-            StatusLabel:Set("Selected: " .. currentTargetBaseName)
-            print("[DEBUG] Selected:", currentTargetBaseName)
+            StatusLabel:Set("Selected: " .. currentTargetBaseName .. " - Test TP")
+            print("[DEBUG] Selected base:", currentTargetBaseName)
         end
     end,
 })
 
-local AutoFarmToggle = Tab:CreateToggle({
-    Name = "Auto Farm / TP",
+Tab:CreateToggle({
+    Name = "Auto Farm / TP Loop",
     CurrentValue = false,
     Flag = "AutoFarm",
     Callback = function(Value)
         autoFarmEnabled = Value
         if Value then
-            if not currentTargetBaseName then
-                Rayfield:Notify({Title = "Error", Content = "Select mob first!", Duration = 4})
-                AutoFarmToggle:Set(false)
+            if not currentTargetBaseName or currentTargetBaseName:find("No mobs") then
+                Rayfield:Notify({Title = "Select mob first!", Duration = 4})
                 return
             end
-            StatusLabel:Set("FARMING: " .. currentTargetBaseName)
-            Rayfield:Notify({Title = "Farm ON", Content = "TP loop started", Duration = 4})
-            teleportToMob(currentTargetBaseName)  -- Instant TP
+            StatusLabel:Set("Farming: " .. currentTargetBaseName)
+            teleportToMob(currentTargetBaseName)  -- instant
             startFarmLoop()
         else
             if farmThread then task.cancel(farmThread) end
-            StatusLabel:Set("Farm OFF")
-            Rayfield:Notify({Title = "Farm OFF", Duration = 3})
+            StatusLabel:Set("Stopped")
         end
     end,
 })
 
-local DelaySlider = Tab:CreateSlider({
+Tab:CreateSlider({
     Name = "Delay (s)",
-    Range = {2, 20},
-    Increment = 0.5,
+    Range = {3, 20},
+    Increment = 1,
     Suffix = "s",
-    CurrentValue = 5,  -- Slower for safety
+    CurrentValue = 5,
     Flag = "Delay",
-    Callback = function(Value)
-        farmDelay = Value
-    end,
+    Callback = function(Value) farmDelay = Value end,
 })
 
 Tab:CreateButton({
-    Name = "TP Once (TEST - Watch Console!)",
+    Name = "TP Once (Check F9!)",
     Callback = function()
-        print("[DEBUG] Button clicked")
-        local ok = currentTargetBaseName and teleportToMob(currentTargetBaseName) or false
-        Rayfield:Notify({
-            Title = ok and "TP OK!" or "Failed - Check F9 Console",
-            Duration = 5,
-        })
+        if currentTargetBaseName then
+            teleportToMob(currentTargetBaseName)
+        else
+            Rayfield:Notify({Title = "Select first!", Duration = 3})
+        end
     end,
 })
 
 Tab:CreateButton({
-    Name = "Refresh Mobs",
+    Name = "Refresh & Scan Folder",
     Callback = function()
         local opts = getBaseNames()
         Dropdown:Refresh(opts, true)
-        StatusLabel:Set("Refreshed: " .. #opts .. " mobs")
-        Rayfield:Notify({Title = #opts .. " mobs loaded", Duration = 3})
+        StatusLabel:Set("Scanned: " .. #opts .. " types (see F9)")
+        Rayfield:Notify({Title = "Refreshed - Check Console for Names", Duration = 5})
     end,
 })
 
-Rayfield:LoadConfiguration()
-print("=== Anime Destroyers Nomek Farmer LOADED - NO HRP FIX ===")
-print("1. Refresh → 2. Select → 3. TP Once (check F9 for DEBUG) → 4. Farm ON")
+print("=== Anime Destroyers Farmer - DIAGNOSTIC MODE ===")
+print("Click 'Refresh & Scan Folder' → look at F9 console for REAL mob names/paths!")
+print("If folder empty: Unlock Namek world first (buy with yen, go to portal).")
