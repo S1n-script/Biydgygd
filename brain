@@ -586,137 +586,127 @@ MiscTab:CreateLabel("HM HUB Misc")
 task.wait(1)
 local Tab = Window:CreateTab("Auto Quest", 4483362458) -- Title, Image
 
--- === COMPLETE NOMEEK MOB FARMER (Rayfield) - FIXED TP + FARM LOOP ===
--- Paste this after loading Rayfield & creating Window/Tab
--- e.g.: local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
--- local Window = Rayfield:CreateWindow({Name = "Nomek Farmer", ...})
--- local Tab = Window:CreateTab("Farming", 4483362458)
+-- === COMPLETE NOMEEK MOB FARMER (Rayfield) - IMPROVED TP RELIABILITY ===
+-- Paste AFTER Rayfield load + Window/Tab creation
 
 local nomekFolder = workspace:WaitForChild("MobSpawns"):WaitForChild("Nomek")
 
--- Farm state variables
+-- State
 local autoFarmEnabled = false
 local farmDelay = 4
-local currentTargetBaseName = nil   -- STRING from dropdown[1]
-local lastTPTime = 0
+local currentTargetBaseName = nil
+local StatusLabel = nil  -- We'll create this for feedback
 
--- Step 1: Collect unique base names (strip _number suffix)
+-- Get base names (clean, no _1 etc.)
 local function getBaseNames()
     local baseNamesSet = {}
-    for _, child in ipairs(nomekFolder:GetChildren()) do
-        local fullName = child.Name
-        local baseName = fullName:gsub("_%d+$", "")  -- Remove _1, _2, etc.
-        if baseName ~= "" and not baseNamesSet[baseName] then
+    for _, child in nomekFolder:GetChildren() do
+        local baseName = child.Name:gsub("_%d+$", "")
+        if baseName ~= "" then
             baseNamesSet[baseName] = true
         end
     end
-    local spawnOptions = {}
-    for name in pairs(baseNamesSet) do
-        table.insert(spawnOptions, name)
-    end
-    table.sort(spawnOptions)
-    if #spawnOptions == 0 then
-        table.insert(spawnOptions, "No spawns found")
-    end
-    return spawnOptions
+    local options = {}
+    for name in pairs(baseNamesSet) do table.insert(options, name) end
+    table.sort(options)
+    if #options == 0 then table.insert(options, "No spawns found") end
+    return options
 end
 
--- Helper: Get robust CFrame from mob/spawn (handles Part OR Model)
+-- Get best CFrame from target (Part or Model)
 local function getMobCFrame(target)
-    -- Priority: HRP > PrimaryPart > any BasePart > fallback
-    local hrp = target:FindFirstChild("HumanoidRootPart")
-    if hrp then return hrp.CFrame end
-    
-    local primary = target.PrimaryPart
-    if primary then return primary.CFrame end
-    
-    if target:IsA("BasePart") then return target.CFrame end
-    
-    -- Model fallback: GetPivot (modern Roblox)
-    if target:GetPivot then
-        return target:GetPivot()
+    if target:IsA("Model") then
+        if target.PrimaryPart then return target.PrimaryPart.CFrame end
+        if target:FindFirstChild("HumanoidRootPart") then return target.HumanoidRootPart.CFrame end
+        return target:GetPivot()  -- Modern fallback
+    elseif target:IsA("BasePart") then
+        return target.CFrame
     end
-    
-    warn("No valid CFrame found for:", target.Name)
     return nil
 end
 
--- Teleport to matching mob (robust CFrame + face the mob)
+-- Reliable teleport function
 local function teleportToMob(baseName)
-    if not baseName or baseName == "No spawns found" or type(baseName) ~= "string" then
-        return false
-    end
+    if not baseName or baseName == "No spawns found" then return false end
     
     local target = nil
-    for _, child in ipairs(nomekFolder:GetChildren()) do
+    for _, child in nomekFolder:GetChildren() do
         if child.Name:match("^" .. baseName .. "(_%d+)?$") then
             target = child
-            break  -- First match
+            break
         end
     end
-    
-    if not target then
-        warn("No target spawn found for:", baseName)
-        return false
-    end
+    if not target then return false end
     
     local mobCFrame = getMobCFrame(target)
     if not mobCFrame then
-        warn("Failed to get CFrame for:", target.Name)
+        warn("No valid CFrame for target:", target.Name)
         return false
     end
     
     local player = game.Players.LocalPlayer
-    local character = player.Character
-    if not character then return false end
+    local char = player.Character
+    if not char then return false end
     
-    local root = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChildWhichIsA("BasePart")
+    task.wait(0.1)  -- Tiny wait helps in some games
+    
+    local root = char:FindFirstChild("HumanoidRootPart")
     if not root then
-        warn("No root part in character")
+        warn("No HumanoidRootPart in character")
         return false
     end
     
-    -- TP slightly in front + above, facing the mob (perfect for farming)
-    local mobPos = mobCFrame.Position
-    local tpPos = mobPos + Vector3.new(math.random(-3,3), 5, math.random(-3,3))  -- slight random offset
-    root.CFrame = CFrame.lookAt(tpPos, mobPos)
+    -- Preferred: PivotTo (sets whole model, more reliable)
+    local success, err = pcall(function()
+        char:PivotTo(mobCFrame * CFrame.new(0, 5, -3))  -- In front + above
+    end)
     
-    print("TP to", target.Name, "at", mobPos)
+    if not success then
+        -- Fallback: old MoveTo or direct root set
+        warn("PivotTo failed:", err)
+        if root then
+            root.CFrame = mobCFrame * CFrame.new(0, 5, -3)
+        else
+            char:MoveTo(mobCFrame.Position + Vector3.new(0, 5, -3))
+        end
+    end
+    
+    print("Attempted TP to:", target.Name, "at", mobCFrame.Position)
+    if StatusLabel then
+        StatusLabel:Set("Last TP: " .. target.Name .. " | OK")
+    end
     return true
 end
 
--- Farm loop (fixed: tick()-based, no yield, immediate TP on start)
-local farmConnection
+-- Farm loop (simple, safe)
+local farmThread
 local function startFarmLoop()
-    if farmConnection then farmConnection:Disconnect() end
-    
-    local RunService = game:GetService("RunService")
-    farmConnection = RunService.Heartbeat:Connect(function()
-        if not autoFarmEnabled then return end
-        
-        local character = game.Players.LocalPlayer.Character
-        if not character or not currentTargetBaseName then return end
-        
-        local now = tick()
-        local jitter = farmDelay + math.random(-0.5, 0.5)  -- anti-detection random
-        if now - lastTPTime >= jitter then
-            if teleportToMob(currentTargetBaseName) then
-                lastTPTime = now
+    if farmThread then task.cancel(farmThread) end
+    farmThread = task.spawn(function()
+        while autoFarmEnabled do
+            if currentTargetBaseName and game.Players.LocalPlayer.Character then
+                local success = teleportToMob(currentTargetBaseName)
+                if not success and StatusLabel then
+                    StatusLabel:Set("TP Failed - Check console")
+                end
             end
+            task.wait(farmDelay)
         end
     end)
 end
 
--- Handle character respawn (TP immediately after reload)
+-- Respawn handler
 game.Players.LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(3)  -- full load
+    task.wait(4)  -- Wait longer for full spawn
     if autoFarmEnabled and currentTargetBaseName then
-        lastTPTime = 0  -- force quick TP
         teleportToMob(currentTargetBaseName)
     end
 end)
 
--- === UI ELEMENTS ===
+-- === UI ===
+
+-- Status label for feedback
+StatusLabel = Tab:CreateLabel("Status: Waiting...")
 
 -- Dropdown
 local Dropdown = Tab:CreateDropdown({
@@ -726,21 +716,15 @@ local Dropdown = Tab:CreateDropdown({
     MultipleOptions = false,
     Flag = "SelectedNomekMobType",
     Callback = function(Option)
-        currentTargetBaseName = Option and Option[1]
+        currentTargetBaseName = Option[1]  -- string
         if currentTargetBaseName then
-            print("Target set:", currentTargetBaseName)
-            if autoFarmEnabled then
-                Rayfield:Notify({
-                    Title = "Target Updated",
-                    Content = "Now farming: " .. currentTargetBaseName,
-                    Duration = 3,
-                })
-            end
+            print("Target:", currentTargetBaseName)
+            if StatusLabel then StatusLabel:Set("Selected: " .. currentTargetBaseName) end
         end
     end,
 })
 
--- Auto-Farm Toggle
+-- Toggle (your syntax is correct)
 local AutoFarmToggle = Tab:CreateToggle({
     Name = "Auto-Farm / TP Loop",
     CurrentValue = false,
@@ -749,35 +733,25 @@ local AutoFarmToggle = Tab:CreateToggle({
         autoFarmEnabled = Value
         if Value then
             if not currentTargetBaseName then
-                Rayfield:Notify({
-                    Title = "Error",
-                    Content = "Select a mob type first!",
-                    Duration = 4,
-                    Image = 4483362458,
-                })
+                Rayfield:Notify({Title = "Error", Content = "Select mob first!", Duration = 4})
                 AutoFarmToggle:Set(false)
                 return
             end
-            lastTPTime = 0  -- Force immediate TP
-            Rayfield:Notify({
-                Title = "Auto-Farm ON",
-                Content = "Farming " .. currentTargetBaseName .. " (~" .. farmDelay .. "s)",
-                Duration = 5,
-            })
+            Rayfield:Notify({Title = "ON", Content = "Farming " .. currentTargetBaseName, Duration = 4})
+            if StatusLabel then StatusLabel:Set("Farming: " .. currentTargetBaseName) end
             startFarmLoop()
+            teleportToMob(currentTargetBaseName)  -- Immediate first TP
         else
-            if farmConnection then farmConnection:Disconnect() end
-            Rayfield:Notify({
-                Title = "Auto-Farm OFF",
-                Duration = 3,
-            })
+            if farmThread then task.cancel(farmThread) end
+            Rayfield:Notify({Title = "OFF", Content = "Stopped", Duration = 3})
+            if StatusLabel then StatusLabel:Set("Stopped") end
         end
     end,
 })
 
--- Delay Slider
+-- Slider (your syntax correct)
 local DelaySlider = Tab:CreateSlider({
-    Name = "TP Delay (s)",
+    Name = "TP Delay (seconds)",
     Range = {1, 15},
     Increment = 0.5,
     Suffix = "s",
@@ -785,37 +759,34 @@ local DelaySlider = Tab:CreateSlider({
     Flag = "FarmDelay",
     Callback = function(Value)
         farmDelay = Value
-        print("Delay:", Value)
+        print("Delay set to", Value)
     end,
 })
 
--- Test TP
+-- Test button
 Tab:CreateButton({
-    Name = "TP Once (Test)",
+    Name = "Teleport Once (Test)",
     Callback = function()
         if currentTargetBaseName then
-            local success = teleportToMob(currentTargetBaseName)
+            local ok = teleportToMob(currentTargetBaseName)
             Rayfield:Notify({
-                Title = success and "TP Success!" or "TP Failed",
-                Duration = 2,
-                Image = success and 4483362458 or nil,  -- green check or warning
+                Title = ok and "TP OK" or "TP Failed",
+                Content = ok and "Check console/position" or "See warns",
+                Duration = 4,
             })
         else
-            Rayfield:Notify({Title = "No target!", Duration = 3})
+            Rayfield:Notify({Title = "No mob selected", Duration = 3})
         end
     end,
 })
 
 -- Refresh
 Tab:CreateButton({
-    Name = "Refresh Dropdown",
+    Name = "Refresh List",
     Callback = function()
-        local newOptions = getBaseNames()
-        Dropdown:Refresh(newOptions, true)
-        Rayfield:Notify({Title = "Refreshed (" .. #newOptions .. ")", Duration = 3})
+        Dropdown:Refresh(getBaseNames(), true)
     end,
 })
 
 Rayfield:LoadConfiguration()
-
-print("=== Nomek Farmer (TP Fixed) Loaded ===")
+print("Nomek Farmer Loaded - Use 'Teleport Once' to test first!")
