@@ -583,7 +583,9 @@ MiscTab:CreateButton({
 -- Label at bottom
 MiscTab:CreateLabel("HM HUB Misc")
 
--- ... after creating Tab ...
+task.wait(1)
+local Tab = Window:CreateTab("Auto Quest", 4483362458) -- Title, Image
+
 
 local Dropdown = Tab:CreateDropdown({
     Name = "Select Mob Spawn",
