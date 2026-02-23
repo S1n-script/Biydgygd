@@ -586,9 +586,9 @@ MiscTab:CreateLabel("HM HUB Misc")
 task.wait(1)
 local Tab = Window:CreateTab("Auto Quest", 4483362458) -- Title, Image
 
--- === ANIME DESTROYERS ULTIMATE FARMER - FIXED DETECTION (Higher Threshold + Debug) ===
--- Now detects EVEN IF slightly far (10k studs) + prints distances to console
--- Paste AFTER Rayfield + Window/Tab
+-- === ANIME DESTROYERS FARMER - ISLAND SELECTOR (Reliable - No Distance Bugs!) ===
+-- Dropdown lists ALL islands → Pick one → Mobs auto-load → Farm ALL spawns
+-- Paste AFTER Rayfield load + Window/Tab
 
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
@@ -598,60 +598,31 @@ local autoFarmEnabled = false
 local farmDelay = 5
 local currentTargetBaseName = nil
 local currentIslandFolder = nil
+local currentMobFolder = nil
 
--- FIXED DETECTION: Higher threshold + ALWAYS pick closest (no fail)
-local function detectCurrentIsland()
-    local char = player.Character
-    if not char then 
-        print("[DEBUG] No character")
-        return nil 
-    end
-    
-    local root = char:FindFirstChild("HumanoidRootPart") 
-        or char:FindFirstChild("Torso") 
-        or char:FindFirstChild("UpperTorso") 
-        or char.PrimaryPart
-        or char:FindFirstChildWhichIsA("BasePart")
-    if not root then 
-        print("[DEBUG] No root part found")
-        return nil 
-    end
-    
-    local playerPos = root.Position
-    print("[DEBUG] Player pos:", playerPos)
-    
-    local distances = {}
-    local closestFolder = nil
-    local minDist = math.huge
-    
+-- Get ALL islands with mobs
+local function getIslandOptions()
+    local options = {}
     for _, islandFolder in ipairs(mobSpawnsFolder:GetChildren()) do
         if islandFolder:IsA("Folder") and #islandFolder:GetChildren() > 0 then
-            local folderMinDist = math.huge
-            for _, mob in ipairs(islandFolder:GetChildren()) do
-                if mob:IsA("BasePart") then
-                    local dist = (playerPos - mob.Position).Magnitude
-                    if dist < folderMinDist then
-                        folderMinDist = dist
-                    end
-                end
-            end
-            distances[islandFolder.Name] = folderMinDist
-            print("[DEBUG] Dist to " .. islandFolder.Name .. ": " .. math.floor(folderMinDist) .. " studs (" .. #islandFolder:GetChildren() .. " mobs)")
-            
-            if folderMinDist < minDist then  -- NO THRESHOLD - always pick closest
-                minDist = folderMinDist
-                closestFolder = islandFolder
-            end
+            table.insert(options, islandFolder.Name .. " (" .. #islandFolder:GetChildren() .. " mobs)")
         end
     end
-    
-    print("[DEBUG] Closest: " .. (closestFolder and closestFolder.Name or "NONE") .. " (" .. math.floor(minDist) .. " studs)")
-    return closestFolder
+    table.sort(options)
+    return #options > 0 and options or {"No islands"}
 end
 
--- Rest unchanged...
+-- Parse selected island name → get folder
+local function setIslandFromOption(option)
+    local islandName = option:match("^(.-) %(")
+    if not islandName then islandName = option end
+    currentIslandFolder = mobSpawnsFolder:FindFirstChild(islandName)
+    return currentIslandFolder ~= nil
+end
+
+-- Get mobs from SELECTED island
 local function getBaseNames()
-    if not currentIslandFolder then return {"No island"} end
+    if not currentIslandFolder then return {"No island selected"} end
     
     local baseNamesSet = {}
     for _, child in ipairs(currentIslandFolder:GetChildren()) do
@@ -671,6 +642,7 @@ local function getBaseNames()
     return #options > 0 and options or {"No mobs"}
 end
 
+-- TP to random matching mob
 local function teleportToMob(baseName)
     if not baseName or baseName:find("No") then return false end
 
@@ -708,16 +680,30 @@ end
 player.CharacterAdded:Connect(function()
     task.wait(4)
     if autoFarmEnabled then
-        currentIslandFolder = detectCurrentIsland()
         teleportToMob(currentTargetBaseName)
     end
 end)
 
--- UI (same, but better status)
-local StatusLabel = Tab:CreateLabel("🗺️ Click Refresh - See F9 for distances")
+-- === UI - ISLAND SELECTOR ===
+local IslandDropdown = Tab:CreateDropdown({
+    Name = "🏝️ Select Island",
+    Options = getIslandOptions(),
+    CurrentOption = {},
+    MultipleOptions = false,
+    Flag = "IslandSelect",
+    Callback = function(Option)
+        if setIslandFromOption(Option[1]) then
+            local opts = getBaseNames()
+            MobDropdown:Refresh(opts, true)
+            StatusLabel:Set("🏝️ " .. currentIslandFolder.Name .. " (" .. #currentIslandFolder:GetChildren() .. " mobs) | Select Mob ↓")
+        else
+            StatusLabel:Set("❌ Invalid island")
+        end
+    end,
+})
 
-local Dropdown = Tab:CreateDropdown({
-    Name = "Select Mob (Current Island)",
+local MobDropdown = Tab:CreateDropdown({
+    Name = "🎯 Select Mob Type",
     Options = {},
     CurrentOption = {},
     MultipleOptions = false,
@@ -725,28 +711,29 @@ local Dropdown = Tab:CreateDropdown({
     Callback = function(Option)
         currentTargetBaseName = Option[1]
         local island = currentIslandFolder and currentIslandFolder.Name or "None"
-        StatusLabel:Set("🎯 " .. (currentTargetBaseName or "None") .. " | 🏝️ " .. island)
+        StatusLabel:Set("🎯 " .. (currentTargetBaseName or "None") .. " in " .. island)
     end,
 })
 
+local StatusLabel = Tab:CreateLabel("🗺️ Select Island → Mob → Farm!")
+
 Tab:CreateToggle({
-    Name = "🚀 Auto Farm",
+    Name = "🚀 Auto Farm Loop",
     CurrentValue = false,
     Flag = "AutoFarm",
     Callback = function(Value)
         autoFarmEnabled = Value
         if Value then
             if not currentIslandFolder then
-                Rayfield:Notify({Title = "❌ Refresh first!", Duration = 4})
+                Rayfield:Notify({Title = "❌ Select Island first!", Duration = 4})
                 return
             end
             if not currentTargetBaseName then
-                Rayfield:Notify({Title = "❌ Select mob!", Duration = 4})
+                Rayfield:Notify({Title = "❌ Select Mob first!", Duration = 4})
                 return
             end
-            local island = currentIslandFolder.Name
-            StatusLabel:Set("🔥 FARMING " .. currentTargetBaseName:upper() .. " in " .. island)
-            Rayfield:Notify({Title = "Farm ON! 🎉", Duration = 5})
+            StatusLabel:Set("🔥 FARMING " .. currentTargetBaseName:upper() .. " in " .. currentIslandFolder.Name)
+            Rayfield:Notify({Title = "Farm Started! 🎉", Duration = 5})
             teleportToMob(currentTargetBaseName)
             startFarmLoop()
         else
@@ -757,7 +744,7 @@ Tab:CreateToggle({
 })
 
 Tab:CreateSlider({
-    Name = "⏱️ Delay",
+    Name = "⏱️ TP Delay",
     Range = {2, 20},
     Increment = 0.5,
     Suffix = "s",
@@ -770,35 +757,22 @@ Tab:CreateButton({
     Name = "⚡ TP Once",
     Callback = function()
         if currentTargetBaseName and currentIslandFolder and teleportToMob(currentTargetBaseName) then
-            Rayfield:Notify({Title = "✅ TP OK!", Duration = 2})
+            Rayfield:Notify({Title = "✅ TP Success!", Duration = 2})
         else
-            Rayfield:Notify({Title = "❌ Refresh?", Duration = 3})
+            Rayfield:Notify({Title = "❌ Select Island/Mob", Duration = 3})
         end
     end,
 })
 
 Tab:CreateButton({
-    Name = "🔄 Refresh Island (Debug in F9)",
+    Name = "🔄 Refresh Islands",
     Callback = function()
-        currentIslandFolder = detectCurrentIsland()
-        if currentIslandFolder then
-            local islandName = currentIslandFolder.Name
-            local opts = getBaseNames()
-            local totalMobs = #currentIslandFolder:GetChildren()
-            Dropdown:Refresh(opts, true)
-            StatusLabel:Set("✅ " .. islandName .. " | " .. #opts .. " types | " .. totalMobs .. " mobs")
-            Rayfield:Notify({
-                Title = islandName .. " DETECTED!",
-                Content = totalMobs .. " mobs ready",
-                Duration = 5
-            })
-        else
-            StatusLabel:Set("❌ NO ISLAND - Check F9 distances")
-            Rayfield:Notify({Title = "No close island (see console)", Duration = 5})
-        end
+        local opts = getIslandOptions()
+        IslandDropdown:Refresh(opts, true)
+        Rayfield:Notify({Title = #opts .. " islands ready", Duration = 3})
     end,
 })
 
 Rayfield:LoadConfiguration()
-print("=== FIXED Multi-Island Farmer - DEBUG DISTANCES ===")
-print("Refresh → Open F9 → See 'Dist to Nomek: 150 studs' etc. → Should ALWAYS detect closest!")
+print("=== ISLAND SELECTOR FARMER - NO MORE DISTANCE BUGS! ===")
+print("1. Refresh Islands 2. Select e.g. 'Nomek (83 mobs)' 3. Select Mob 4. Farm ON")
