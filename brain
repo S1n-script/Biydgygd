@@ -583,15 +583,17 @@ MiscTab:CreateLabel("Important Areas TP – Select & Click!")
 local tpPositions = {
     ["Avatar Leveling"] = Vector3.new(-5464.0126953125, 10374.0771484375, -3315.83349609375),
     ["Craft"] = Vector3.new(-4873.64208984375, 10433.8935546875, -3030.97216796875),
+    ["Dragon Reroll"] = Vector3.new(-5279.40966796875, 10389.3125, -3522.92724609375),
+    ["Saiyan Reroll"] = Vector3.new(-4974.5849609375, 10409.408203125, -3498.215087890625),
     ["Dragon Star"] = Vector3.new(-5297.517578125, 10391.60546875, -3417.10693359375)
 }
-local selectedTP = "None"  -- Default
+local selectedTP = "Avatar Leveling"  -- Default
 
 -- TP Dropdown
 MiscTab:CreateDropdown({
     Name = "Areas Of Intrest",
-    Options = {"None" ,"Avatar Leveling", "Craft", "Dragon Star"},
-    CurrentOption = {"None"},
+    Options = {"Avatar Leveling", "Craft", "Dragon Reroll", "Saiyan Reroll", "Dragon Star"},
+    CurrentOption = {"Avatar Leveling"},
     Flag = "TPAreaFlag",
     Callback = function(Option)
         selectedTP = Option[1]
