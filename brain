@@ -754,3 +754,49 @@ Tab:CreateButton({
 
 Rayfield:LoadConfiguration()
 print("=== Namek Farmer - ALL MOBS MODE ACTIVE ===")
+
+-- Paste this in your Rayfield Tab (e.g. after creating MainTab or MiscTab)
+-- Full Island TP Dropdown (Exact Order: Nomek → Leaf Village → Egg City → Lost City → Slayers Hideout)
+
+local IslandTPDropdown = Tab:CreateDropdown({
+    Name = "🏝️ Teleport to Island",
+    Options = {
+        "Nomek",
+        "Leaf Village", 
+        "Egg City",
+        "Lost City",
+        "Slayers Hideout"
+    },
+    CurrentOption = {"Nomek"},  -- Default
+    MultipleOptions = false,
+    Flag = "IslandTPFlag",
+    
+    Callback = function(Option)
+        local islandName = Option[1]  -- Rayfield passes table {selected}
+        
+        -- Full remote path from your code
+        local remote = game:GetService("ReplicatedStorage")
+            :WaitForChild("Packages")
+            :WaitForChild("_Index")
+            :WaitForChild("sleitnick_knit@1.5.1")
+            :WaitForChild("knit")
+            :WaitForChild("Services")
+            :WaitForChild("MapService")
+            :WaitForChild("RF")
+            :WaitForChild("Teleport")
+        
+        -- Fire with island name
+        pcall(function()
+            remote:InvokeServer(islandName)
+        end)
+        
+        Rayfield:Notify({
+            Title = "TP Success! 🚀",
+            Content = "Teleported to " .. islandName,
+            Duration = 4,
+            Image = 4483345998  -- Green checkmark
+        })
+        
+        print("TP'd to:", islandName)
+    end,
+})
