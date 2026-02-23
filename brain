@@ -586,9 +586,8 @@ MiscTab:CreateLabel("HM HUB Misc")
 task.wait(1)
 local Tab = Window:CreateTab("Auto Quest", 4483362458) -- Title, Image
 
--- === ANIME DESTROYERS FARMER - ISLAND SELECTOR (Reliable - No Distance Bugs!) ===
--- Dropdown lists ALL islands → Pick one → Mobs auto-load → Farm ALL spawns
--- Paste AFTER Rayfield load + Window/Tab
+-- === ANIME DESTROYERS ISLAND SELECTOR FARMER - FIXED NIL + CONFIG ERRORS ===
+-- No more "attempt to index nil with 'Set'" or missing flag warnings
 
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
@@ -598,53 +597,50 @@ local autoFarmEnabled = false
 local farmDelay = 5
 local currentTargetBaseName = nil
 local currentIslandFolder = nil
-local currentMobFolder = nil
 
--- Get ALL islands with mobs
+-- Get all islands with mob count
 local function getIslandOptions()
     local options = {}
-    for _, islandFolder in ipairs(mobSpawnsFolder:GetChildren()) do
-        if islandFolder:IsA("Folder") and #islandFolder:GetChildren() > 0 then
-            table.insert(options, islandFolder.Name .. " (" .. #islandFolder:GetChildren() .. " mobs)")
+    for _, folder in ipairs(mobSpawnsFolder:GetChildren()) do
+        if folder:IsA("Folder") and #folder:GetChildren() > 0 then
+            table.insert(options, folder.Name .. " (" .. #folder:GetChildren() .. " mobs)")
         end
     end
     table.sort(options)
-    return #options > 0 and options or {"No islands"}
+    return #options > 0 and options or {"No islands found"}
 end
 
--- Parse selected island name → get folder
-local function setIslandFromOption(option)
-    local islandName = option:match("^(.-) %(")
-    if not islandName then islandName = option end
+-- Set current island from selected option
+local function setIslandFromOption(selected)
+    if not selected then return false end
+    local islandName = selected:match("^(.-) %(") or selected
     currentIslandFolder = mobSpawnsFolder:FindFirstChild(islandName)
     return currentIslandFolder ~= nil
 end
 
--- Get mobs from SELECTED island
+-- Get mob types from current island
 local function getBaseNames()
-    if not currentIslandFolder then return {"No island selected"} end
+    if not currentIslandFolder then return {"Select an island first"} end
     
-    local baseNamesSet = {}
+    local set = {}
     for _, child in ipairs(currentIslandFolder:GetChildren()) do
-        local cleanName = child.Name:gsub("_%d+$", "")
+        local clean = child.Name:gsub("_%d+$", "")
             :gsub(" %b()", "")
             :gsub("Clone", "")
             :match("^%s*(.-)%s*$")
-        if cleanName and #cleanName > 1 then
-            baseNamesSet[cleanName] = true
+        if clean and #clean > 1 then
+            set[clean] = true
         end
     end
-    local options = {}
-    for name in pairs(baseNamesSet) do
-        table.insert(options, name)
-    end
-    table.sort(options)
-    return #options > 0 and options or {"No mobs"}
+    local list = {}
+    for name in pairs(set) do table.insert(list, name) end
+    table.sort(list)
+    return #list > 0 and list or {"No mobs in this island"}
 end
 
--- TP to random matching mob
+-- TP to random mob of type
 local function teleportToMob(baseName)
-    if not baseName or baseName:find("No") then return false end
+    if not baseName or baseName:find("No") or not currentIslandFolder then return false end
 
     local matches = {}
     for _, child in ipairs(currentIslandFolder:GetChildren()) do
@@ -656,22 +652,21 @@ local function teleportToMob(baseName)
     if #matches == 0 then return false end
 
     local target = matches[math.random(1, #matches)]
-    local tpCFrame = target.CFrame * CFrame.new(math.random(-4,4), 6, math.random(-6,-3))
-
-    local char = player.Character
-    if char then
-        pcall(function() char:PivotTo(tpCFrame) end)
-    end
+    local offset = CFrame.new(math.random(-4,4), 6, math.random(-6,-3))
+    pcall(function() player.Character:PivotTo(target.CFrame * offset) end)
 
     return true
 end
 
+-- Farm loop
 local farmThread
 local function startFarmLoop()
     if farmThread then task.cancel(farmThread) end
     farmThread = task.spawn(function()
         while autoFarmEnabled do
-            teleportToMob(currentTargetBaseName)
+            if currentTargetBaseName then
+                teleportToMob(currentTargetBaseName)
+            end
             task.wait(farmDelay)
         end
     end)
@@ -679,12 +674,14 @@ end
 
 player.CharacterAdded:Connect(function()
     task.wait(4)
-    if autoFarmEnabled then
+    if autoFarmEnabled and currentTargetBaseName then
         teleportToMob(currentTargetBaseName)
     end
 end)
 
--- === UI - ISLAND SELECTOR ===
+-- === UI - FIXED CALLBACKS ===
+local StatusLabel = Tab:CreateLabel("Select Island → Mob → Farm")
+
 local IslandDropdown = Tab:CreateDropdown({
     Name = "🏝️ Select Island",
     Options = getIslandOptions(),
@@ -692,87 +689,91 @@ local IslandDropdown = Tab:CreateDropdown({
     MultipleOptions = false,
     Flag = "IslandSelect",
     Callback = function(Option)
-        if setIslandFromOption(Option[1]) then
-            local opts = getBaseNames()
-            MobDropdown:Refresh(opts, true)
-            StatusLabel:Set("🏝️ " .. currentIslandFolder.Name .. " (" .. #currentIslandFolder:GetChildren() .. " mobs) | Select Mob ↓")
+        local selected = Option and Option[1]
+        if selected and setIslandFromOption(selected) then
+            local mobOptions = getBaseNames()
+            MobDropdown:Refresh(mobOptions, true)
+            StatusLabel:Set("Island: " .. currentIslandFolder.Name .. " (" .. #currentIslandFolder:GetChildren() .. " mobs)")
         else
-            StatusLabel:Set("❌ Invalid island")
+            StatusLabel:Set("Invalid island selected")
         end
     end,
 })
 
 local MobDropdown = Tab:CreateDropdown({
     Name = "🎯 Select Mob Type",
-    Options = {},
+    Options = {"Select island first"},
     CurrentOption = {},
     MultipleOptions = false,
     Flag = "MobType",
     Callback = function(Option)
-        currentTargetBaseName = Option[1]
-        local island = currentIslandFolder and currentIslandFolder.Name or "None"
-        StatusLabel:Set("🎯 " .. (currentTargetBaseName or "None") .. " in " .. island)
+        currentTargetBaseName = Option and Option[1]
+        if currentTargetBaseName and currentIslandFolder then
+            StatusLabel:Set("Mob: " .. currentTargetBaseName .. " | Island: " .. currentIslandFolder.Name)
+        end
     end,
 })
 
-local StatusLabel = Tab:CreateLabel("🗺️ Select Island → Mob → Farm!")
-
 Tab:CreateToggle({
-    Name = "🚀 Auto Farm Loop",
+    Name = "🚀 Auto Farm / TP",
     CurrentValue = false,
     Flag = "AutoFarm",
     Callback = function(Value)
         autoFarmEnabled = Value
         if Value then
             if not currentIslandFolder then
-                Rayfield:Notify({Title = "❌ Select Island first!", Duration = 4})
+                Rayfield:Notify({Title = "Select an island first!", Duration = 4})
                 return
             end
             if not currentTargetBaseName then
-                Rayfield:Notify({Title = "❌ Select Mob first!", Duration = 4})
+                Rayfield:Notify({Title = "Select a mob first!", Duration = 4})
                 return
             end
-            StatusLabel:Set("🔥 FARMING " .. currentTargetBaseName:upper() .. " in " .. currentIslandFolder.Name)
-            Rayfield:Notify({Title = "Farm Started! 🎉", Duration = 5})
+            StatusLabel:Set("FARMING: " .. currentTargetBaseName .. " in " .. currentIslandFolder.Name)
+            Rayfield:Notify({Title = "Farm Started", Duration = 4})
             teleportToMob(currentTargetBaseName)
             startFarmLoop()
         else
             if farmThread then task.cancel(farmThread) end
-            StatusLabel:Set("⏹️ Stopped")
+            StatusLabel:Set("Farm Stopped")
         end
     end,
 })
 
 Tab:CreateSlider({
-    Name = "⏱️ TP Delay",
+    Name = "Delay (seconds)",
     Range = {2, 20},
     Increment = 0.5,
     Suffix = "s",
     CurrentValue = 5,
-    Flag = "Delay",
+    Flag = "FarmDelay",
     Callback = function(Value) farmDelay = Value end,
 })
 
 Tab:CreateButton({
-    Name = "⚡ TP Once",
+    Name = "TP Once (Test)",
     Callback = function()
-        if currentTargetBaseName and currentIslandFolder and teleportToMob(currentTargetBaseName) then
-            Rayfield:Notify({Title = "✅ TP Success!", Duration = 2})
+        if currentTargetBaseName and currentIslandFolder then
+            if teleportToMob(currentTargetBaseName) then
+                Rayfield:Notify({Title = "TP Success!", Duration = 2})
+            else
+                Rayfield:Notify({Title = "TP Failed - Check console", Duration = 3})
+            end
         else
-            Rayfield:Notify({Title = "❌ Select Island/Mob", Duration = 3})
+            Rayfield:Notify({Title = "Select island & mob", Duration = 3})
         end
     end,
 })
 
 Tab:CreateButton({
-    Name = "🔄 Refresh Islands",
+    Name = "Refresh Islands",
     Callback = function()
         local opts = getIslandOptions()
         IslandDropdown:Refresh(opts, true)
-        Rayfield:Notify({Title = #opts .. " islands ready", Duration = 3})
+        Rayfield:Notify({Title = #opts .. " islands loaded", Duration = 3})
     end,
 })
 
 Rayfield:LoadConfiguration()
-print("=== ISLAND SELECTOR FARMER - NO MORE DISTANCE BUGS! ===")
-print("1. Refresh Islands 2. Select e.g. 'Nomek (83 mobs)' 3. Select Mob 4. Farm ON")
+print("=== FIXED Island Selector Farmer Loaded ===")
+print("1. Refresh Islands 2. Pick island 3. Pick mob 4. Farm ON")
