@@ -584,7 +584,7 @@ MiscTab:CreateButton({
 MiscTab:CreateLabel("HM HUB Misc")
 
 task.wait(1)
-local Tab = Window:CreateTab("Auto Quest", 4483362458) -- Title, Image
+local Tab = Window:CreateTab("Auto Quest fixed", 4483362458) -- Title, Image
 
 -- === ANIME DESTROYERS NOMEEK FARMER (Working Version - All Mobs Random TP!) ===
 -- Paste AFTER Rayfield load + Window/Tab creation
