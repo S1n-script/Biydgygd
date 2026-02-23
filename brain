@@ -586,8 +586,25 @@ MiscTab:CreateLabel("HM HUB Misc")
 task.wait(1)
 local Tab = Window:CreateTab("Auto Quest fixed", 4483362458) -- Title, Image
 
--- === ANIME DESTROYERS NAMEK FARMER - ALL MOBS OF TYPE (Random Cycle) ===
--- Paste AFTER Rayfield load + Window + Tab creation
+
+-- =====================================
+-- ALL ISLANDS MOB FARMER (TP + Auto-Load Mobs)
+-- =====================================
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local mobSpawnsFolder = workspace:WaitForChild("MobSpawns")
+
+local mapTPRemote = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.5.1"):WaitForChild("knit"):WaitForChild("Services"):WaitForChild("MapService"):WaitForChild("RF"):WaitForChild("Teleport")
+
+local autoFarmEnabled = false
+local farmDelay = 5
+local currentTargetBaseName = nil
+local currentIslandFolder = nil
+
+-- Known islands (from your Dex)
+local knownIslands = {"Nomek", "Leaf Village
 
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
@@ -675,7 +692,7 @@ end
 
 -- Respawn handler
 player.CharacterAdded:Connect(function()
-    task.wait(4)
+    task.wait(2)
     if autoFarmEnabled and currentTargetBaseName then
         teleportToMob(currentTargetBaseName)
     end
@@ -722,7 +739,7 @@ local AutoFarmToggle = Tab:CreateToggle({
 
 local DelaySlider = Tab:CreateSlider({
     Name = "TP Delay",
-    Range = {2, 20},
+    Range = {1, 20},
     Increment = 0.5,
     Suffix = "s",
     CurrentValue = 5,
