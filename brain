@@ -530,6 +530,52 @@ MiscTab:CreateButton({
     end,
 })
 
+-- Paste this in your Rayfield Tab (e.g. after creating MainTab or MiscTab)
+-- Full Island TP Dropdown (Exact Order: Nomek → Leaf Village → Egg City → Lost City → Slayers Hideout)
+
+local IslandTPDropdown = Tab:CreateDropdown({
+    Name = "🏝️ Teleport to Island",
+    Options = {
+        "Nomek",
+        "Leaf Village", 
+        "Egg City",
+        "Lost City",
+        "Slayers Hideout"
+    },
+    CurrentOption = {"Nomek"},  -- Default
+    MultipleOptions = false,
+    Flag = "IslandTPFlag",
+    
+    Callback = function(Option)
+        local islandName = Option[1]  -- Rayfield passes table {selected}
+        
+        -- Full remote path from your code
+        local remote = game:GetService("ReplicatedStorage")
+            :WaitForChild("Packages")
+            :WaitForChild("_Index")
+            :WaitForChild("sleitnick_knit@1.5.1")
+            :WaitForChild("knit")
+            :WaitForChild("Services")
+            :WaitForChild("MapService")
+            :WaitForChild("RF")
+            :WaitForChild("Teleport")
+        
+        -- Fire with island name
+        pcall(function()
+            remote:InvokeServer(islandName)
+        end)
+        
+        Rayfield:Notify({
+            Title = "TP Success! 🚀",
+            Content = "Teleported to " .. islandName,
+            Duration = 4,
+            Image = 4483345998  -- Green checkmark
+        })
+        
+        print("TP'd to:", islandName)
+    end,
+})
+
 -- Optional Separator Label
 MiscTab:CreateLabel("Important Areas TP – Select & Click!")
 
@@ -586,39 +632,8 @@ MiscTab:CreateLabel("HM HUB Misc")
 task.wait(1)
 local Tab = Window:CreateTab("Auto Quest fixed", 4483362458) -- Title, Image
 
--- Paste this as a NEW Tab in your Rayfield script (e.g. after MiscTab)
--- Island TP Dropdown + Auto Mob Refresh + Farmer (Works on ALL islands!)
-
-local FarmerTab = Window:CreateTab("Island Farmer", 4483362458)
-
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local mobSpawnsFolder = workspace:WaitForChild("MobSpawns")
-
-Tab:CreateButton({
-    Name = "TP Once (Test)",
-    Callback = function()
-        if currentTargetBaseName then
-            teleportToMob(currentTargetBaseName)
-            Rayfield:Notify({Title = "TP Sent!", Duration = 2})
-        else
-            Rayfield:Notify({Title = "Select a mob first", Duration = 3})
-        end
-    end,
-})
-
-local mapTPRemote = ReplicatedStorage
-    :WaitForChild("Packages")
-    :WaitForChild("_Index")
-    :WaitForChild("sleitnick_knit@1.5.1")
-    :WaitForChild("knit")
-    :WaitForChild("Services")
-    :WaitForChild("MapService")
-    :WaitForChild("RF")
-    :WaitForChild("Teleport")
-
-local autoFarmEnabled = false
+-- === ANIME DESTROYERS NAMEK FARMER - ALL MOBS OF TYPE (Random Cycle) ===
+-- Paste AFTER Rayfield load + Window + Tab creation
 
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
@@ -786,48 +801,3 @@ Tab:CreateButton({
 Rayfield:LoadConfiguration()
 print("=== Namek Farmer - ALL MOBS MODE ACTIVE ===")
 
--- Paste this in your Rayfield Tab (e.g. after creating MainTab or MiscTab)
--- Full Island TP Dropdown (Exact Order: Nomek → Leaf Village → Egg City → Lost City → Slayers Hideout)
-
-local IslandTPDropdown = Tab:CreateDropdown({
-    Name = "🏝️ Teleport to Island",
-    Options = {
-        "Nomek",
-        "Leaf Village", 
-        "Egg City",
-        "Lost City",
-        "Slayers Hideout"
-    },
-    CurrentOption = {"Nomek"},  -- Default
-    MultipleOptions = false,
-    Flag = "IslandTPFlag",
-    
-    Callback = function(Option)
-        local islandName = Option[1]  -- Rayfield passes table {selected}
-        
-        -- Full remote path from your code
-        local remote = game:GetService("ReplicatedStorage")
-            :WaitForChild("Packages")
-            :WaitForChild("_Index")
-            :WaitForChild("sleitnick_knit@1.5.1")
-            :WaitForChild("knit")
-            :WaitForChild("Services")
-            :WaitForChild("MapService")
-            :WaitForChild("RF")
-            :WaitForChild("Teleport")
-        
-        -- Fire with island name
-        pcall(function()
-            remote:InvokeServer(islandName)
-        end)
-        
-        Rayfield:Notify({
-            Title = "TP Success! 🚀",
-            Content = "Teleported to " .. islandName,
-            Duration = 4,
-            Image = 4483345998  -- Green checkmark
-        })
-        
-        print("TP'd to:", islandName)
-    end,
-})
