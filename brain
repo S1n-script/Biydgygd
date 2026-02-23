@@ -586,8 +586,39 @@ MiscTab:CreateLabel("HM HUB Misc")
 task.wait(1)
 local Tab = Window:CreateTab("Auto Quest fixed", 4483362458) -- Title, Image
 
--- === ANIME DESTROYERS NAMEK FARMER - ALL MOBS OF TYPE (Random Cycle) ===
--- Paste AFTER Rayfield load + Window + Tab creation
+-- Paste this as a NEW Tab in your Rayfield script (e.g. after MiscTab)
+-- Island TP Dropdown + Auto Mob Refresh + Farmer (Works on ALL islands!)
+
+local FarmerTab = Window:CreateTab("Island Farmer", 4483362458)
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local mobSpawnsFolder = workspace:WaitForChild("MobSpawns")
+
+Tab:CreateButton({
+    Name = "TP Once (Test)",
+    Callback = function()
+        if currentTargetBaseName then
+            teleportToMob(currentTargetBaseName)
+            Rayfield:Notify({Title = "TP Sent!", Duration = 2})
+        else
+            Rayfield:Notify({Title = "Select a mob first", Duration = 3})
+        end
+    end,
+})
+
+local mapTPRemote = ReplicatedStorage
+    :WaitForChild("Packages")
+    :WaitForChild("_Index")
+    :WaitForChild("sleitnick_knit@1.5.1")
+    :WaitForChild("knit")
+    :WaitForChild("Services")
+    :WaitForChild("MapService")
+    :WaitForChild("RF")
+    :WaitForChild("Teleport")
+
+local autoFarmEnabled = false
 
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
