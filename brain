@@ -150,7 +150,7 @@ end
 
 -- Dropdown to display all items
 local MachinesDropdown = Tab:CreateDropdown({
-    Name = "Machines in workspace.Machines",
+    Name = "Machines",
     Options = getMachinesList(),
     CurrentOption = {"None"},
     MultipleOptions = false,
@@ -158,7 +158,7 @@ local MachinesDropdown = Tab:CreateDropdown({
     
     Callback = function(Option)
         local selected = Option[1]
-        if selected and selected ~= "No machines found" then
+        if selected and selected ~= "None found" then
             Rayfield:Notify({
                 Title = "Machine Selected",
                 Content = selected,
@@ -180,20 +180,75 @@ local MachinesDropdown = Tab:CreateDropdown({
 
 -- Refresh button
 Tab:CreateButton({
-    Name = "Refresh Machines List",
+    Name = "Refresh List",
     Callback = function()
         local newOptions = getMachinesList()
         MachinesDropdown:Refresh(newOptions, true)
         Rayfield:Notify({
-            Title = "Machines Refreshed",
-            Content = #newOptions .. " unique items found",
+            Title = "Refreshed",
+            Content = #newOptions .. "items found",
             Duration = 3
         })
     end,
 })
 
--- Optional status label
-Tab:CreateLabel("Click Refresh to scan workspace.Machines")
+Tab:CreateButton({
+    Name = "Teleport",
+    Callback = function()
+        if not selectedMachine or selectedMachine == "No machines found" or selectedMachine == "None" then
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "Select a machine first!",
+                Duration = 4
+            })
+            return
+        end
+        
+        local machine = machinesFolder:FindFirstChild(selectedMachine)
+        if not machine then
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "Machine '" .. selectedMachine .. "' not found anymore",
+                Duration = 4
+            })
+            return
+        end
+        
+        -- Get character's root part
+        local char = player.Character
+        if not char then
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "Character not loaded",
+                Duration = 4
+            })
+            return
+        end
+        
+        local root = char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart
+        if not root then
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "No root part found",
+                Duration = 4
+            })
+            return
+        end
+        
+        -- Teleport slightly above the machine
+        local targetCFrame = machine.CFrame or CFrame.new(machine.Position)
+        root.CFrame = targetCFrame + Vector3.new(0, 5, 0)  -- 5 studs above
+        
+        Rayfield:Notify({
+            Title = "Teleport Success!",
+            Content = "Zapped to: " .. selectedMachine,
+            Duration = 4,
+            Image = 4483362458  -- optional checkmark icon
+        })
+        
+        print("Teleported to:", selectedMachine, "at", targetCFrame.Position)
+    end,
+})
 
 task.wait(0.5)
 local Tab = Window:CreateTab("Auto Quest + Farm", 4483362458) -- Title, Image
