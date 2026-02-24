@@ -121,16 +121,15 @@ Tab:CreateToggle({
 })
 
 -- =====================================
--- SCAN workspace.Machines + SHOW POSITIONS
+-- TELEPORT TO MACHINES IN workspace.Machines
+-- Uses workspace.Players for your HRP
 -- =====================================
 
 local machinesFolder = workspace:WaitForChild("Machines")
 local player = game.Players.LocalPlayer
 
-local selectedMachineName = nil  -- stores the name you picked
-
--- Get unique names
-local function getMachinesList()
+-- Get unique names from Machines folder
+local function getMachineNames()
     local names = {}
     local seen = {}
 
@@ -152,102 +151,118 @@ local function getMachinesList()
 end
 
 -- Dropdown
+local selectedMachine = nil
+
 local MachinesDropdown = Tab:CreateDropdown({
     Name = "Select Machine",
-    Options = getMachinesList(),
+    Options = getMachineNames(),
     CurrentOption = {"None"},
     MultipleOptions = false,
-    Flag = "MachinesDropdown",
+    Flag = "MachineTPDropdown",
     
     Callback = function(Option)
-        selectedMachineName = Option and Option[1]
+        selectedMachine = Option and Option[1]
         
-        if selectedMachineName and selectedMachineName ~= "No machines found" and selectedMachineName ~= "None" then
+        if selectedMachine and selectedMachine ~= "No machines found" and selectedMachine ~= "None" then
             Rayfield:Notify({
                 Title = "Selected",
-                Content = selectedMachineName,
+                Content = "Ready to TP: " .. selectedMachine,
                 Duration = 3
             })
-            print("Selected machine type:", selectedMachineName)
+            print("Selected machine:", selectedMachine)
         else
-            selectedMachineName = nil
+            selectedMachine = nil
         end
     end,
 })
 
--- Refresh
+-- Refresh list
 Tab:CreateButton({
-    Name = "Refresh List",
+    Name = "Refresh Machines",
     Callback = function()
-        local newOptions = getMachinesList()
+        local newOptions = getMachineNames()
         MachinesDropdown:Refresh(newOptions, true)
         MachinesDropdown:Set({"None"})
-        selectedMachineName = nil
+        selectedMachine = nil
         Rayfield:Notify({
             Title = "Refreshed",
-            Content = #newOptions .. " unique machines",
+            Content = #newOptions .. " machines found",
             Duration = 3
         })
     end,
 })
 
--- Button: Show positions of all items with the selected name
+-- Teleport button using HRP from workspace.Players
 Tab:CreateButton({
-    Name = "Show Positions of Selected Machine",
+    Name = "Teleport",
     Callback = function()
-        if not selectedMachineName or selectedMachineName == "No machines found" or selectedMachineName == "None" then
+        if not selectedMachine or selectedMachine == "No machines found" or selectedMachine == "None" then
             Rayfield:Notify({
-                Title = "Nothing selected",
-                Content = "Pick a machine from the dropdown first!",
+                Title = "Error",
+                Content = "Select a machine first!",
                 Duration = 4
             })
             return
         end
         
-        local matches = {}
-        local count = 0
-        
-        for _, child in ipairs(machinesFolder:GetChildren()) do
-            if child.Name == selectedMachineName then
-                count = count + 1
-                local pos = child.Position or (child.PrimaryPart and child.PrimaryPart.Position)
-                if pos then
-                    table.insert(matches, {
-                        name = child.Name,
-                        fullName = child:GetFullName(),
-                        position = pos
-                    })
-                end
-            end
-        end
-        
-        if count == 0 then
+        local machine = machinesFolder:FindFirstChild(selectedMachine)
+        if not machine then
             Rayfield:Notify({
-                Title = "Not Found",
-                Content = "No '" .. selectedMachineName .. "' found right now",
+                Title = "Error",
+                Content = selectedMachine .. " not found",
                 Duration = 4
             })
             return
         end
         
-        -- Build message
-        local msg = "Found " .. count .. "x '" .. selectedMachineName .. "':\n"
-        for i, item in ipairs(matches) do
-            local p = item.position
-            msg = msg .. i .. ". " .. string.format("(%d, %d, %d)\n", math.floor(p.X), math.floor(p.Y), math.floor(p.Z))
-            print(i .. ". " .. item.fullName .. " at " .. tostring(p))
+        -- Get your character from workspace.Players
+        local playerFolder = workspace:WaitForChild("Players")
+        local playerChar = playerFolder:FindFirstChild(player.Name)
+        if not playerChar then
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "Your character not found in workspace.Players",
+                Duration = 4
+            })
+            return
         end
+        
+        -- Find HRP
+        local hrp = playerChar:FindFirstChild("HumanoidRootPart")
+        if not hrp then
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "No HumanoidRootPart found",
+                Duration = 4
+            })
+            return
+        end
+        
+        -- Get target CFrame (prefer PrimaryPart if Model, else Position)
+        local targetCFrame
+        if machine.PrimaryPart then
+            targetCFrame = machine.PrimaryPart.CFrame
+        elseif machine:IsA("BasePart") then
+            targetCFrame = machine.CFrame
+        else
+            -- Fallback for other objects
+            local firstPart = machine:FindFirstChildWhichIsA("BasePart", true)
+            targetCFrame = firstPart and firstPart.CFrame or CFrame.new(machine.Position or Vector3.new())
+        end
+        
+        -- Teleport 5 studs above
+        hrp.CFrame = targetCFrame + Vector3.new(0, 5, 0)
         
         Rayfield:Notify({
-            Title = "Positions for " .. selectedMachineName,
-            Content = msg,
-            Duration = 8  -- longer because it may have multiple lines
+            Title = "Teleport Success!",
+            Content = "Moved to: " .. selectedMachine,
+            Duration = 4
         })
+        
+        print("Teleported to:", selectedMachine, "at", targetCFrame.Position)
     end,
 })
 
--- Status
-Tab:CreateLabel("Refresh → Select machine → Show Positions")
 
 task.wait(0.5)
 local Tab = Window:CreateTab("Auto Quest + Farm", 4483362458) -- Title, Image
