@@ -309,6 +309,197 @@ MiscTab:CreateButton({
 
 local FarmTab = Window:CreateTab("Auto Quest + Farm", 4483362458)
 
+-- =====================================
+-- AUTO FARM - Detects current map from workspace.Maps + Mobs from MobSpawns
+-- Dropdown shows only mobs on your current island
+-- =====================================
+
+local FarmTab = Window:CreateTab("Auto Farm", 4483362458)
+
+local player = game.Players.LocalPlayer
+local mapsFolder = workspace:WaitForChild("Maps")
+local mobSpawnsFolder = workspace:WaitForChild("MobSpawns")
+
+local autoFarmEnabled = false
+local farmDelay = 5
+local selectedMobType = nil
+local currentMapFolder = nil
+local currentMobFolder = nil
+
+-- Detect current map by finding which map folder has corresponding mobs nearby
+local function detectCurrentMap()
+    local character = player.Character
+    if not character then return nil end
+    
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
+    
+    local playerPos = root.Position
+    local closestMapName = nil
+    local minAvgDist = math.huge
+    
+    for _, mapFolder in ipairs(mapsFolder:GetChildren()) do
+        if mapFolder:IsA("Folder") or mapFolder:IsA("Model") then
+            local mapName = mapFolder.Name
+            local mobFolder = mobSpawnsFolder:FindFirstChild(mapName)
+            
+            if mobFolder and #mobFolder:GetChildren() > 0 then
+                local totalDist = 0
+                local count = 0
+                
+                for _, mob in ipairs(mobFolder:GetChildren()) do
+                    if mob:IsA("BasePart") then
+                        totalDist += (playerPos - mob.Position).Magnitude
+                        count += 1
+                    end
+                end
+                
+                if count > 0 then
+                    local avgDist = totalDist / count
+                    if avgDist < minAvgDist then
+                        minAvgDist = avgDist
+                        closestMapName = mapName
+                        currentMapFolder = mapFolder
+                        currentMobFolder = mobFolder
+                    end
+                end
+            end
+        end
+    end
+    
+    return closestMapName
+end
+
+-- Get unique mob base names from current map's mob folder
+local function getMobTypes()
+    if not currentMobFolder then return {"Scan map first"} end
+    
+    local types = {}
+    local seen = {}
+    
+    for _, child in ipairs(currentMobFolder:GetChildren()) do
+        if child:IsA("BasePart") then
+            local baseName = child.Name:gsub("_%d+$", ""):gsub("Clone", ""):match("^%s*(.-)%s*$")
+            if baseName and baseName ~= "" and not seen[baseName] then
+                seen[baseName] = true
+                table.insert(types, baseName)
+            end
+        end
+    end
+    
+    table.sort(types)
+    return #types > 0 and types or {"No mobs on this map"}
+end
+
+-- Dropdown for mobs (will be refreshed on scan)
+local MobDropdown = FarmTab:CreateDropdown({
+    Name = "Mobs on Current Map",
+    Options = {"Scan map first"},
+    CurrentOption = {"Scan map first"},
+    MultipleOptions = false,
+    Flag = "CurrentMapMobs",
+    
+    Callback = function(Option)
+        selectedMobType = Option[1]
+        if selectedMobType and selectedMobType ~= "Scan map first" and selectedMobType ~= "No mobs on this map" then
+            print("Selected to farm:", selectedMobType, "on", currentMapFolder and currentMapFolder.Name or "unknown")
+        end
+    end,
+})
+
+-- Scan & refresh button
+FarmTab:CreateButton({
+    Name = "🔍 Scan Current Map & Load Mobs",
+    Callback = function()
+        currentMapFolder = nil
+        currentMobFolder = nil
+        local mapName = detectCurrentMap()
+        
+        if mapName then
+            local mobCount = currentMobFolder and #currentMobFolder:GetChildren() or 0
+            local typesCount = #getMobTypes()
+            
+            Rayfield:Notify({
+                Title = "Map Detected",
+                Content = mapName .. " (" .. mobCount .. " mobs, " .. typesCount .. " types)",
+                Duration = 5
+            })
+            
+            MobDropdown:Refresh(getMobTypes(), true)
+        else
+            Rayfield:Notify({
+                Title = "No Map Detected",
+                Content = "Move closer to mobs on a map",
+                Duration = 6
+            })
+            MobDropdown:Refresh({"Scan map first"}, true)
+        end
+    end,
+})
+
+-- Auto Farm Toggle
+FarmTab:CreateToggle({
+    Name = "Auto Farm Selected Mob",
+    CurrentValue = false,
+    Flag = "AutoFarmToggle",
+    
+    Callback = function(Value)
+        autoFarmEnabled = Value
+        
+        if Value then
+            if not selectedMobType or not currentMobFolder then
+                Rayfield:Notify({Title = "Error", Content = "Scan map & select mob first!", Duration = 5})
+                autoFarmEnabled = false
+                return
+            end
+            
+            Rayfield:Notify({
+                Title = "Auto Farm ON",
+                Content = "TP to random " .. selectedMobType .. " every ~" .. farmDelay .. "s",
+                Duration = 5
+            })
+            
+            task.spawn(function()
+                while autoFarmEnabled do
+                    local matches = {}
+                    for _, mob in ipairs(currentMobFolder:GetChildren()) do
+                        if mob:IsA("BasePart") and mob.Name:match("^" .. selectedMobType .. "(_%d+)?$") then
+                            table.insert(matches, mob)
+                        end
+                    end
+                    
+                    if #matches > 0 then
+                        local target = matches[math.random(1, #matches)]
+                        local char = player.Character
+                        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                        
+                        if hrp then
+                            local offset = CFrame.new(math.random(-5,5), 6, math.random(-8,-3))
+                            hrp.CFrame = target.CFrame * offset
+                        end
+                    end
+                    
+                    task.wait(farmDelay)
+                end
+            end)
+        else
+            Rayfield:Notify({Title = "Auto Farm OFF", Duration = 3})
+        end
+    end,
+})
+
+-- Delay slider
+FarmTab:CreateSlider({
+    Name = "Teleport Delay",
+    Range = {1, 12},
+    Increment = 0.5,
+    Suffix = "seconds",
+    CurrentValue = 5,
+    Flag = "FarmDelay",
+    Callback = function(Value)
+        farmDelay = Value
+    end,
+})
 
 
 Rayfield:Notify({
