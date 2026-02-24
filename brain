@@ -22,7 +22,7 @@ local autoClick = false
 local autoStat = false
 local selectedStat = "Energy"  -- Default
 
-
+-- Auto Clicker Toggle
 local ClickToggle = MainTab:CreateToggle({
     Name = "Auto Clicker",
     CurrentValue = false,
@@ -54,16 +54,17 @@ local ClickToggle = MainTab:CreateToggle({
                         clickRemote:InvokeServer()
                     end)
                     
-                    task.wait(0.1)  -- Increase to 0.1 if you get kicked
+                    task.wait(0.1)
                 end
             end)
         end
     end,
 })
 
-task.wait(0.5)
-local Tab = Window:CreateTab("Misc", 4483362458) -- Title, Image
+-- Misc Tab
+local MiscTab = Window:CreateTab("Misc", 4483362458)
 
+-- Auto Buy Best Title Toggle (on MiscTab)
 local autoBuyTitleEnabled = false
 
 local AutoTitleToggle = MiscTab:CreateToggle({
@@ -84,18 +85,17 @@ local AutoTitleToggle = MiscTab:CreateToggle({
             task.spawn(function()
                 while autoBuyTitleEnabled do
                     local success, err = pcall(function()
-                        -- Adjust this remote path if titles are under a different service
                         local titlesRemote = game:GetService("ReplicatedStorage")
                             :WaitForChild("Packages")
                             :WaitForChild("_Index")
                             :WaitForChild("sleitnick_knit@1.5.1")
                             :WaitForChild("knit")
                             :WaitForChild("Services")
-                            :WaitForChild("TitlesService")  -- Change if it's called something else (e.g. TitleService)
+                            :WaitForChild("TitlesService")
                             :WaitForChild("RF")
-                            :WaitForChild("BuyBestTitle")   -- Common name - change to actual remote name if different
+                            :WaitForChild("BuyBestTitle")
                         
-                        titlesRemote:InvokeServer()  -- No args = buy best/available
+                        titlesRemote:InvokeServer()
                     end)
                     
                     if not success then
@@ -109,7 +109,7 @@ local AutoTitleToggle = MiscTab:CreateToggle({
                         break
                     end
                     
-                    task.wait(30)  -- Safe delay – adjust to 15–60s based on rate limits
+                    task.wait(30)
                 end
             end)
         else
@@ -122,10 +122,11 @@ local AutoTitleToggle = MiscTab:CreateToggle({
     end,
 })
 
-Tab:CreateToggle({
-    Name = "Auto Rank Up",  -- Changed from "Auto Ascension"
+-- Auto Rank Up Toggle (on MiscTab)
+local AutoRankUpToggle = MiscTab:CreateToggle({
+    Name = "Auto Rank Up",
     CurrentValue = false,
-    Flag = "AutoRankUp",    -- Updated flag name to match (avoids old config conflict)
+    Flag = "AutoRankUp",
     
     Callback = function(Value)
         getgenv().AutoRankUp = Value
@@ -163,7 +164,7 @@ Tab:CreateToggle({
                         break
                     end
                     
-                    task.wait(60)  -- Safe 60-second delay (adjust if needed)
+                    task.wait(60)
                 end
             end)
         else
@@ -176,15 +177,9 @@ Tab:CreateToggle({
     end,
 })
 
--- =====================================
--- TELEPORT TO MACHINES IN workspace.Machines
--- Uses workspace.Players for your HRP
--- =====================================
-
+-- Machines Teleport Section (on MiscTab)
 local machinesFolder = workspace:WaitForChild("Machines")
-local player = game.Players.LocalPlayer
 
--- Get unique names from Machines folder
 local function getMachineNames()
     local names = {}
     local seen = {}
@@ -206,10 +201,9 @@ local function getMachineNames()
     return names
 end
 
--- Dropdown
 local selectedMachine = nil
 
-local MachinesDropdown = Tab:CreateDropdown({
+local MachinesDropdown = MiscTab:CreateDropdown({
     Name = "Select Machine",
     Options = getMachineNames(),
     CurrentOption = {"None"},
@@ -232,8 +226,7 @@ local MachinesDropdown = Tab:CreateDropdown({
     end,
 })
 
--- Refresh list
-Tab:CreateButton({
+MiscTab:CreateButton({
     Name = "Refresh Machines",
     Callback = function()
         local newOptions = getMachineNames()
@@ -248,8 +241,7 @@ Tab:CreateButton({
     end,
 })
 
--- Teleport button using HRP from workspace.Players
-Tab:CreateButton({
+MiscTab:CreateButton({
     Name = "Teleport",
     Callback = function()
         if not selectedMachine or selectedMachine == "No machines found" or selectedMachine == "None" then
@@ -271,7 +263,6 @@ Tab:CreateButton({
             return
         end
         
-        -- Get your character from workspace.Players
         local playerFolder = workspace:WaitForChild("Players")
         local playerChar = playerFolder:FindFirstChild(player.Name)
         if not playerChar then
@@ -283,7 +274,6 @@ Tab:CreateButton({
             return
         end
         
-        -- Find HRP
         local hrp = playerChar:FindFirstChild("HumanoidRootPart")
         if not hrp then
             Rayfield:Notify({
@@ -294,19 +284,16 @@ Tab:CreateButton({
             return
         end
         
-        -- Get target CFrame (prefer PrimaryPart if Model, else Position)
         local targetCFrame
         if machine.PrimaryPart then
             targetCFrame = machine.PrimaryPart.CFrame
         elseif machine:IsA("BasePart") then
             targetCFrame = machine.CFrame
         else
-            -- Fallback for other objects
             local firstPart = machine:FindFirstChildWhichIsA("BasePart", true)
             targetCFrame = firstPart and firstPart.CFrame or CFrame.new(machine.Position or Vector3.new())
         end
         
-        -- Teleport 5 studs above
         hrp.CFrame = targetCFrame + Vector3.new(0, 5, 0)
         
         Rayfield:Notify({
@@ -315,10 +302,17 @@ Tab:CreateButton({
             Duration = 4
         })
         
-        print("Teleported to:", selectedMachine, "at", targetCFrame.Position)
+        print("Teleported to:", selectedMachine)
     end,
 })
 
 
-task.wait(0.5)
-local Tab = Window:CreateTab("Auto Quest + Farm", 4483362458) -- Title, Image
+local FarmTab = Window:CreateTab("Auto Quest + Farm", 4483362458)
+
+
+
+Rayfield:Notify({
+    Title = "HM Hub Loaded!",
+    Content = "All",
+    Duration = 0
+})
