@@ -66,7 +66,7 @@ local Tab = Window:CreateTab("Misc", 4483362458) -- Title, Image
 
 local autoBuyTitleEnabled = false
 
-local AutoTitleToggle = MiscTab:CreateToggle({
+local AutoTitleToggle = MainTab:CreateToggle({
     Name = "Auto Buy Best Title",
     CurrentValue = false,
     Flag = "AutoBuyTitle",
