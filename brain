@@ -62,3 +62,63 @@ local ClickToggle = MainTab:CreateToggle({
         end
     end,
 })
+
+task.wait(0.5)
+local Tab = Window:CreateTab("Misc", 4483362458) -- Title, Image
+
+Tab:CreateToggle({
+    Name = "Auto Rank Up",  -- Changed from "Auto Ascension"
+    CurrentValue = false,
+    Flag = "AutoRankUp",    -- Updated flag name to match (avoids old config conflict)
+    
+    Callback = function(Value)
+        getgenv().AutoRankUp = Value
+        
+        if Value then
+            Rayfield:Notify({
+                Title = "Auto Rank Up",
+                Content = "Ranking up every 60s...",
+                Duration = 4
+            })
+            
+            task.spawn(function()
+                while getgenv().AutoRankUp do
+                    local success, err = pcall(function()
+                        game:GetService("ReplicatedStorage")
+                            :WaitForChild("Packages")
+                            :WaitForChild("_Index")
+                            :WaitForChild("sleitnick_knit@1.5.1")
+                            :WaitForChild("knit")
+                            :WaitForChild("Services")
+                            :WaitForChild("RankupService")
+                            :WaitForChild("RF")
+                            :WaitForChild("RankUp")
+                            :InvokeServer()
+                    end)
+                    
+                    if not success then
+                        warn("Auto Rank Up error: " .. tostring(err))
+                        Rayfield:Notify({
+                            Title = "Auto Rank Up Error",
+                            Content = "Failed to rank up – check console. Stopping...",
+                            Duration = 6
+                        })
+                        getgenv().AutoRankUp = false
+                        break
+                    end
+                    
+                    task.wait(60)  -- Safe 60-second delay (adjust if needed)
+                end
+            end)
+        else
+            Rayfield:Notify({
+                Title = "Auto Rank Up",
+                Content = "Stopped.",
+                Duration = 3
+            })
+        end
+    end,
+})
+
+task.wait(0.5)
+local Tab = Window:CreateTab("Auto Quest + Farm", 4483362458) -- Title, Image
