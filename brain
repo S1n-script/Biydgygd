@@ -123,83 +123,135 @@ Tab:CreateToggle({
 task.wait(0.5)
 local Tab = Window:CreateTab("Auto Quest + Farm", 4483362458) -- Title, Image
 
--- Paste this inside your Tab (e.g. after creating the Tab)
--- Dropdown shows UNIQUE mob types only (e.g. "Brulo", "Cell", "Frieza" instead of every _1, _2, etc.)
+-- Paste this inside your Tab (e.g. after creating the MainTab or FarmerTab)
 
 local nomekFolder = workspace:WaitForChild("MobSpawns"):WaitForChild("Nomek")
 
--- Function to get unique mob base names
-local function getUniqueMobTypes()
-    local uniqueTypes = {}
-    local seen = {}  -- prevent duplicates
+local autoFarmEnabled = false
+local farmDelay = 5          -- seconds between TPs (safe value)
+local selectedMobType = nil  -- will be set by dropdown
 
+-- Dropdown to pick mob type (unique base names)
+local function getMobTypes()
+    local types = {}
+    local seen = {}
+    
     for _, part in ipairs(nomekFolder:GetChildren()) do
         if part:IsA("BasePart") then
-            -- Remove common suffixes: _number, (Clone), Clone, etc.
-            local baseName = part.Name
-                :gsub("_%d+$", "")          -- Brulo_1 → Brulo
-                :gsub(" %b()$", "")         -- Brulo (Clone) → Brulo
-                :gsub("Clone$", "")         -- BruloClone → Brulo
-                :match("^%s*(.-)%s*$")      -- trim spaces
-
-            if baseName and baseName ~= "" and not seen[baseName] then
-                seen[baseName] = true
-                table.insert(uniqueTypes, baseName)
+            local base = part.Name:gsub("_%d+$", "")
+            if base ~= "" and not seen[base] then
+                seen[base] = true
+                table.insert(types, base)
             end
         end
     end
-
-    table.sort(uniqueTypes)
     
-    if #uniqueTypes == 0 then
-        table.insert(uniqueTypes, "No mob types found in Nomek")
-    end
-    
-    return uniqueTypes
+    table.sort(types)
+    return #types > 0 and types or {"No mobs found"}
 end
 
--- Create the dropdown with unique types
-local MobTypeDropdown = Tab:CreateDropdown({
-    Name = "Nomek Mob Types",
-    Options = getUniqueMobTypes(),
+local MobDropdown = Tab:CreateDropdown({
+    Name = "Select Mob Type to Farm",
+    Options = getMobTypes(),
     CurrentOption = {},
     MultipleOptions = false,
-    Flag = "NomekMobTypeSelect",
+    Flag = "FarmMobType",
     
     Callback = function(Option)
-        local selectedType = Option[1]  -- Rayfield passes {selected_value}
-        
-        if selectedType and selectedType ~= "No mob types found in Nomek" then
-            Rayfield:Notify({
-                Title = "Mob Type Selected",
-                Content = "Targeting all: " .. selectedType,
-                Duration = 3
-            })
-            print("Selected mob type:", selectedType)
-            
-            -- Optional: Example action - print how many spawns of this type exist
-            local count = 0
-            for _, part in ipairs(nomekFolder:GetChildren()) do
-                if part:IsA("BasePart") and part.Name:match("^" .. selectedType .. "(_%d+)?$") then
-                    count = count + 1
-                end
-            end
-            print("Found " .. count .. " spawns of " .. selectedType)
-            
-            -- You can add teleport, highlight, etc. here later
+        selectedMobType = Option[1]
+        if selectedMobType then
+            print("Farm target set to:", selectedMobType)
         end
     end,
 })
 
--- Refresh button to update if new mob types appear
+-- Auto Farm Toggle with random TP to any matching mob
+local AutoFarmToggle = Tab:CreateToggle({
+    Name = "Auto Farm",
+    CurrentValue = false,
+    Flag = "AutoFarmToggle",
+    
+    Callback = function(Value)
+        autoFarmEnabled = Value
+        
+        if Value then
+            if not selectedMobType then
+                Rayfield:Notify({
+                    Title = "Error",
+                    Content = "Select a mob type first!",
+                    Duration = 4
+                })
+                autoFarmEnabled = false
+                AutoFarmToggle:Set(false)
+                return
+            end
+            
+            Rayfield:Notify({
+                Title = "Auto Farm Started",
+                Content = "Teleporting to random " .. selectedMobType .. " every ~" .. farmDelay .. "s",
+                Duration = 5
+            })
+            
+            task.spawn(function()
+                while autoFarmEnabled do
+                    local matches = {}
+                    for _, part in ipairs(nomekFolder:GetChildren()) do
+                        if part:IsA("BasePart") and part.Name:match("^" .. selectedMobType .. "(_%d+)?$") then
+                            table.insert(matches, part)
+                        end
+                    end
+                    
+                    if #matches > 0 then
+                        local target = matches[math.random(1, #matches)]
+                        local offset = CFrame.new(math.random(-4,4), 6, math.random(-6,-3))
+                        
+                        pcall(function()
+                            local char = player.Character
+                            if char then
+                                char:PivotTo(target.CFrame * offset)
+                            end
+                        end)
+                        
+                        print("Teleported to:", target.Name)
+                    else
+                        print("No " .. selectedMobType .. " found right now")
+                    end
+                    
+                    task.wait(farmDelay)
+                end
+            end)
+        else
+            Rayfield:Notify({
+                Title = "Auto Farm",
+                Content = "Stopped.",
+                Duration = 3
+            })
+        end
+    end,
+})
+
+-- Delay slider (optional but recommended)
+Tab:CreateSlider({
+    Name = "TP Delay",
+    Range = {1, 15},
+    Increment = 0.5,
+    Suffix = "s",
+    CurrentValue = 5,
+    Flag = "FarmDelay",
+    Callback = function(Value)
+        farmDelay = Value
+    end,
+})
+
+-- Refresh button for dropdown
 Tab:CreateButton({
     Name = "Refresh Mob Types",
     Callback = function()
-        local newOptions = getUniqueMobTypes()
-        MobTypeDropdown:Refresh(newOptions, true)  -- true = clear old list first
+        local newOptions = getMobTypes()
+        MobDropdown:Refresh(newOptions, true)
         Rayfield:Notify({
-            Title = "Mob Types Refreshed",
-            Content = #newOptions .. " unique types found in Nomek",
+            Title = "Refreshed",
+            Content = #newOptions .. " mob types found",
             Duration = 3
         })
     end,
