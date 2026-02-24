@@ -435,7 +435,7 @@ FarmTab:CreateButton({
     end,
 })
 
--- Auto Farm Toggle
+-- Auto Farm Toggle - FIXED TP using workspace.Players HRP
 FarmTab:CreateToggle({
     Name = "Auto Farm Selected Mob",
     CurrentValue = false,
@@ -446,19 +446,43 @@ FarmTab:CreateToggle({
         
         if Value then
             if not selectedMobType or not currentMobFolder then
-                Rayfield:Notify({Title = "Error", Content = "Scan map & select mob first!", Duration = 5})
+                Rayfield:Notify({
+                    Title = "Error",
+                    Content = "Scan map & select mob first!",
+                    Duration = 5
+                })
                 autoFarmEnabled = false
                 return
             end
             
             Rayfield:Notify({
                 Title = "Auto Farm ON",
-                Content = "TP to random " .. selectedMobType .. " every ~" .. farmDelay .. "s",
+                Content = "Looping random " .. selectedMobType .. " every ~" .. farmDelay .. "s",
                 Duration = 5
             })
             
             task.spawn(function()
                 while autoFarmEnabled do
+                    -- Get character from workspace.Players (your game's structure)
+                    local playersFolder = workspace:WaitForChild("Players", 5)
+                    if not playersFolder then
+                        task.wait(1)
+                        continue
+                    end
+                    
+                    local playerChar = playersFolder:FindFirstChild(player.Name)
+                    if not playerChar then
+                        task.wait(1)
+                        continue
+                    end
+                    
+                    local hrp = playerChar:FindFirstChild("HumanoidRootPart")
+                    if not hrp then
+                        task.wait(1)
+                        continue
+                    end
+                    
+                    -- Find matching mob spawns
                     local matches = {}
                     for _, mob in ipairs(currentMobFolder:GetChildren()) do
                         if mob:IsA("BasePart") and mob.Name:match("^" .. selectedMobType .. "(_%d+)?$") then
@@ -466,22 +490,26 @@ FarmTab:CreateToggle({
                         end
                     end
                     
-                    if #matches > 0 then
-                        local target = matches[math.random(1, #matches)]
-                        local char = player.Character
-                        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                        
-                        if hrp then
-                            local offset = CFrame.new(math.random(-5,5), 6, math.random(-8,-3))
-                            hrp.CFrame = target.CFrame * offset
-                        end
+                    if #matches == 0 then
+                        task.wait(farmDelay)
+                        continue
                     end
+                    
+                    -- Pick random target
+                    local target = matches[math.random(1, #matches)]
+                    
+                    -- Teleport with random offset (safe landing)
+                    local offset = CFrame.new(math.random(-4,4), 6, math.random(-6,-2))
+                    hrp.CFrame = target.CFrame * offset
                     
                     task.wait(farmDelay)
                 end
             end)
         else
-            Rayfield:Notify({Title = "Auto Farm OFF", Duration = 3})
+            Rayfield:Notify({
+                Title = "Auto Farm OFF",
+                Duration = 3
+            })
         end
     end,
 })
