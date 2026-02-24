@@ -122,3 +122,76 @@ Tab:CreateToggle({
 
 task.wait(0.5)
 local Tab = Window:CreateTab("Auto Quest + Farm", 4483362458) -- Title, Image
+
+-- Paste this inside your Tab (e.g. after creating the Tab)
+-- It will create a dropdown showing every unique mob name in workspace.MobSpawns.Nomek
+
+local nomekFolder = workspace:WaitForChild("MobSpawns"):WaitForChild("Nomek")
+
+-- Function to get all mob names (sorted)
+local function getMobNames()
+    local names = {}
+    local seen = {}  -- avoid duplicates
+
+    for _, part in ipairs(nomekFolder:GetChildren()) do
+        if part:IsA("BasePart") then
+            local name = part.Name
+            if not seen[name] then
+                seen[name] = true
+                table.insert(names, name)
+            end
+        end
+    end
+
+    table.sort(names)
+    
+    if #names == 0 then
+        table.insert(names, "No mobs found in Nomek")
+    end
+    
+    return names
+end
+
+-- Create the dropdown
+local MobDropdown = Tab:CreateDropdown({
+    Name = "Nomek Mobs",
+    Options = getMobNames(),
+    CurrentOption = {},
+    MultipleOptions = false,
+    Flag = "NomekMobSelect",
+    Callback = function(Option)
+        local selectedMob = Option[1]  -- Rayfield passes table {value}
+        
+        if selectedMob and selectedMob ~= "No mobs found in Nomek" then
+            Rayfield:Notify({
+                Title = "Mob Selected",
+                Content = "Now targeting: " .. selectedMob,
+                Duration = 3
+            })
+            print("Selected mob:", selectedMob)
+            
+            -- Optional: Do something with the selected mob, e.g. teleport
+            -- local mobPart = nomekFolder:FindFirstChild(selectedMob)
+            -- if mobPart then
+            --     local char = player.Character
+            --     if char and char.PrimaryPart then
+            --         char:PivotTo(mobPart.CFrame + Vector3.new(0, 5, 0))
+            --     end
+            -- end
+        end
+    end,
+})
+
+-- Optional: Refresh button so you can update if new mobs spawn
+Tab:CreateButton({
+    Name = "Refresh Mob List",
+    Callback = function()
+        local newOptions = getMobNames()
+        MobDropdown:Refresh(newOptions, true)  -- true = clear old options
+        Rayfield:Notify({
+            Title = "Mob List Refreshed",
+            Content = #newOptions .. " mobs found in Nomek",
+            Duration = 3
+        })
+    end,
+})
