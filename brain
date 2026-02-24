@@ -307,6 +307,11 @@ MiscTab:CreateButton({
 })
 
 
+-- =====================================
+-- AUTO FARM - Detects current map from workspace.Maps + Mobs from MobSpawns
+-- Dropdown shows only mobs on your current island
+-- =====================================
+
 local FarmTab = Window:CreateTab("Auto Farm", 4483362458)
 
 local player = game.Players.LocalPlayer
@@ -430,7 +435,7 @@ FarmTab:CreateButton({
     end,
 })
 
--- Auto Farm Toggle (Improved - uses workspace.Players HRP)
+-- Auto Farm Toggle
 FarmTab:CreateToggle({
     Name = "Auto Farm Selected Mob",
     CurrentValue = false,
@@ -441,38 +446,19 @@ FarmTab:CreateToggle({
         
         if Value then
             if not selectedMobType or not currentMobFolder then
-                Rayfield:Notify({
-                    Title = "Error",
-                    Content = "Scan map & select mob first!",
-                    Duration = 5
-                })
+                Rayfield:Notify({Title = "Error", Content = "Scan map & select mob first!", Duration = 5})
                 autoFarmEnabled = false
                 return
             end
             
             Rayfield:Notify({
                 Title = "Auto Farm ON",
-                Content = "Looping random " .. selectedMobType .. " every ~" .. farmDelay .. "s",
+                Content = "TP to random " .. selectedMobType .. " every ~" .. farmDelay .. "s",
                 Duration = 5
             })
             
             task.spawn(function()
                 while autoFarmEnabled do
-                    -- Get your character from workspace.Players
-                    local playerFolder = workspace:WaitForChild("Players", 5)
-                    local playerChar = playerFolder and playerFolder:FindFirstChild(player.Name)
-                    if not playerChar then
-                        task.wait(1)
-                        continue
-                    end
-                    
-                    local hrp = playerChar:FindFirstChild("HumanoidRootPart")
-                    if not hrp then
-                        task.wait(1)
-                        continue
-                    end
-                    
-                    -- Find matching mobs
                     local matches = {}
                     for _, mob in ipairs(currentMobFolder:GetChildren()) do
                         if mob:IsA("BasePart") and mob.Name:match("^" .. selectedMobType .. "(_%d+)?$") then
@@ -480,26 +466,22 @@ FarmTab:CreateToggle({
                         end
                     end
                     
-                    if #matches == 0 then
-                        task.wait(farmDelay)
-                        continue
+                    if #matches > 0 then
+                        local target = matches[math.random(1, #matches)]
+                        local char = player.Character
+                        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                        
+                        if hrp then
+                            local offset = CFrame.new(math.random(-5,5), 6, math.random(-8,-3))
+                            hrp.CFrame = target.CFrame * offset
+                        end
                     end
-                    
-                    -- Pick random spawn
-                    local target = matches[math.random(1, #matches)]
-                    
-                    -- TP with random offset (in front + above)
-                    local offset = CFrame.new(math.random(-5,5), 6, math.random(-8,-2))
-                    hrp.CFrame = target.CFrame * offset
                     
                     task.wait(farmDelay)
                 end
             end)
         else
-            Rayfield:Notify({
-                Title = "Auto Farm OFF",
-                Duration = 3
-            })
+            Rayfield:Notify({Title = "Auto Farm OFF", Duration = 3})
         end
     end,
 })
@@ -507,7 +489,7 @@ FarmTab:CreateToggle({
 -- Delay slider
 FarmTab:CreateSlider({
     Name = "Teleport Delay",
-    Range = {1, 12},
+    Range = {3, 12},
     Increment = 0.5,
     Suffix = "seconds",
     CurrentValue = 5,
@@ -517,9 +499,3 @@ FarmTab:CreateSlider({
     end,
 })
 
-
-Rayfield:Notify({
-    Title = "HM Hub Loaded!",
-    Content = "All",
-    Duration = 0
-})
