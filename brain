@@ -22,9 +22,7 @@ local autoClick = false
 local autoStat = false
 local selectedStat = "Energy"  -- Default
 
--- =====================================
--- AUTO CLICKER
--- =====================================
+
 local ClickToggle = MainTab:CreateToggle({
     Name = "Auto Clicker",
     CurrentValue = false,
@@ -66,13 +64,9 @@ local ClickToggle = MainTab:CreateToggle({
 task.wait(0.5)
 local Tab = Window:CreateTab("Misc", 4483362458) -- Title, Image
 
--- =====================================
--- AUTO BUY BEST TITLE TOGGLE
--- =====================================
-
 local autoBuyTitleEnabled = false
 
-local AutoTitleToggle = MainTab:CreateToggle({
+local AutoTitleToggle = MiscTab:CreateToggle({
     Name = "Auto Buy Best Title",
     CurrentValue = false,
     Flag = "AutoBuyTitle",
@@ -127,7 +121,6 @@ local AutoTitleToggle = MainTab:CreateToggle({
         end
     end,
 })
-
 
 Tab:CreateToggle({
     Name = "Auto Rank Up",  -- Changed from "Auto Ascension"
@@ -330,119 +323,187 @@ Tab:CreateButton({
 task.wait(0.5)
 local Tab = Window:CreateTab("Auto Quest + Farm", 4483362458) -- Title, Image
 
--- Paste this inside your Rayfield Tab (e.g. after MainTab)
--- Scans workspace.MobSpawns → detects CURRENT island → dropdown shows PARTS (unique types) inside it
+-- =====================================
+-- AUTO DETECT ISLAND + MOB DROPDOWN + AUTO FARM
+-- Uses workspace.Maps and workspace.Mobs
+-- =====================================
 
 local player = game.Players.LocalPlayer
-local mobSpawnsFolder = workspace:WaitForChild("MobSpawns")
+local mapsFolder = workspace:WaitForChild("Maps")
+local mobsFolder = workspace:WaitForChild("Mobs")
 
-local currentIslandFolder = nil
-local MobDropdown = nil  -- Will be created after detection
+local currentIslandName = nil
+local currentMobFolder = nil
+local selectedMobType = nil
+local autoFarmEnabled = false
+local farmDelay = 5
 
--- Detect current island (closest to player)
+-- Detect current island by checking which map is loaded / closest
 local function detectCurrentIsland()
     local character = player.Character
     if not character then return nil end
-    
     local root = character:FindFirstChild("HumanoidRootPart")
     if not root then return nil end
-    
+
     local playerPos = root.Position
-    local closest = nil
+    local closestName = nil
     local minDist = math.huge
-    
-    for _, folder in ipairs(mobSpawnsFolder:GetChildren()) do
-        if folder:IsA("Folder") then
-            local avgDist = 0
-            local count = 0
-            
-            for _, part in ipairs(folder:GetChildren()) do
-                if part:IsA("BasePart") then
-                    avgDist = avgDist + (playerPos - part.Position).Magnitude
-                    count = count + 1
+
+    -- Method 1: Check which map folder exists and has mobs
+    for _, map in ipairs(mapsFolder:GetChildren()) do
+        if map:IsA("Folder") then
+            local mobSubFolder = mobsFolder:FindFirstChild(map.Name)
+            if mobSubFolder and #mobSubFolder:GetChildren() > 0 then
+                -- Calculate average distance
+                local totalDist = 0
+                local count = 0
+                for _, mob in ipairs(mobSubFolder:GetChildren()) do
+                    if mob:IsA("BasePart") then
+                        totalDist = totalDist + (playerPos - mob.Position).Magnitude
+                        count = count + 1
+                    end
                 end
-            end
-            
-            if count > 0 then
-                avgDist = avgDist / count
-                if avgDist < minDist then
-                    minDist = avgDist
-                    closest = folder
+                if count > 0 then
+                    local avg = totalDist / count
+                    if avg < minDist then
+                        minDist = avg
+                        closestName = map.Name
+                    end
                 end
             end
         end
     end
-    
-    return closest
+
+    return closestName
 end
 
--- Get unique mob types (base names) from island folder
-local function getMobTypes(folder)
+-- Get unique mob types from current island
+local function getMobTypes(islandName)
+    if not islandName then return {"No island detected"} end
+    
+    local mobSubFolder = mobsFolder:FindFirstChild(islandName)
+    if not mobSubFolder then return {"No mobs in " .. islandName} end
+
     local types = {}
     local seen = {}
-    
-    for _, part in ipairs(folder:GetChildren()) do
-        if part:IsA("BasePart") then
-            local baseName = part.Name:gsub("_%d+$", "")  -- Remove _1, _2, etc.
+
+    for _, child in ipairs(mobSubFolder:GetChildren()) do
+        if child:IsA("BasePart") then
+            local baseName = child.Name:gsub("_%d+$", "")  -- Remove _1, _2, etc.
             if baseName ~= "" and not seen[baseName] then
                 seen[baseName] = true
                 table.insert(types, baseName)
             end
         end
     end
-    
+
     table.sort(types)
-    return #types > 0 and types or {"No mobs in this island"}
+    return #types > 0 and types or {"No mobs found"}
 end
 
--- Create/refresh dropdown for current island
-local function createMobDropdown()
-    if MobDropdown then
-        MobDropdown:Destroy()  -- Rayfield destroy if exists
+-- Create/Update Dropdown
+local MobDropdown
+
+local function refreshDropdown()
+    currentIslandName = detectCurrentIsland()
+    if currentIslandName then
+        currentMobFolder = mobsFolder:FindFirstChild(currentIslandName)
     end
-    
-    MobDropdown = Tab:CreateDropdown({
-        Name = "Mobs in Current Island",
-        Options = getMobTypes(currentIslandFolder),
-        CurrentOption = {},
-        MultipleOptions = false,
-        Flag = "CurrentIslandMobs",
-        
-        Callback = function(Option)
-            local selectedMob = Option[1]
-            print("Selected mob type:", selectedMob, "in", currentIslandFolder.Name)
-            -- Add TP or farm logic here if needed
-        end,
-    })
+
+    local options = getMobTypes(currentIslandName)
+
+    if MobDropdown then
+        MobDropdown:Refresh(options, true)
+    else
+        MobDropdown = Tab:CreateDropdown({
+            Name = "Mobs on Current Island",
+            Options = options,
+            CurrentOption = {},
+            MultipleOptions = false,
+            Flag = "CurrentIslandMobs",
+            Callback = function(Option)
+                selectedMobType = Option[1]
+                print("Selected mob type:", selectedMobType, "on", currentIslandName)
+            end,
+        })
+    end
 end
 
--- Main button to scan + load dropdown
-Tab:CreateButton({
-    Name = "🔍 Scan Current Island & Load Mobs",
-    Callback = function()
-        currentIslandFolder = detectCurrentIsland()
+-- Auto Farm Toggle
+local AutoFarmToggle = Tab:CreateToggle({
+    Name = "Auto Farm (Random TP)",
+    CurrentValue = false,
+    Flag = "AutoFarmToggle",
+    
+    Callback = function(Value)
+        autoFarmEnabled = Value
         
-        if currentIslandFolder then
-            local mobCount = #currentIslandFolder:GetChildren()
-            local types = getMobTypes(currentIslandFolder)
-            
+        if Value then
+            if not selectedMobType or not currentMobFolder then
+                Rayfield:Notify({Title = "Error", Content = "Scan island & select mob first!", Duration = 5})
+                autoFarmEnabled = false
+                return
+            end
+
             Rayfield:Notify({
-                Title = "Island Detected!",
-                Content = currentIslandFolder.Name .. " (" .. mobCount .. " mobs, " .. #types .. " types)",
+                Title = "Auto Farm ON",
+                Content = "Farming " .. selectedMobType .. " on " .. currentIslandName,
                 Duration = 5
             })
-            
-            createMobDropdown()
-            print("Loaded mobs from:", currentIslandFolder.Name)
+
+            task.spawn(function()
+                while autoFarmEnabled do
+                    local matches = {}
+                    for _, mob in ipairs(currentMobFolder:GetChildren()) do
+                        if mob:IsA("BasePart") and mob.Name:match("^" .. selectedMobType .. "(_%d+)?$") then
+                            table.insert(matches, mob)
+                        end
+                    end
+
+                    if #matches > 0 then
+                        local target = matches[math.random(1, #matches)]
+                        local char = player.Character
+                        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                        
+                        if hrp then
+                            hrp.CFrame = target.CFrame * CFrame.new(math.random(-4,4), 6, math.random(-6,-3))
+                        end
+                    end
+                    
+                    task.wait(farmDelay)
+                end
+            end)
         else
-            Rayfield:Notify({
-                Title = "No Island Found",
-                Content = "Move closer to mobs on an island (Nomek, Leaf Village, etc.)",
-                Duration = 5
-            })
+            Rayfield:Notify({Title = "Auto Farm OFF", Duration = 3})
         end
     end,
 })
 
--- Status label
-Tab:CreateLabel("Stand on island → Click Scan → Dropdown shows mobs inside")
+-- Main Scan Button
+Tab:CreateButton({
+    Name = "Scan Current Island & Load Mobs",
+    Callback = function()
+        refreshDropdown()
+        Rayfield:Notify({
+            Title = "Island Detected",
+            Content = currentIslandName and (currentIslandName .. " loaded") or "No island detected",
+            Duration = 5
+        })
+    end,
+})
+
+-- Delay Slider
+Tab:CreateSlider({
+    Name = "TP Delay",
+    Range = {2, 15},
+    Increment = 0.5,
+    Suffix = "s",
+    CurrentValue = 5,
+    Flag = "FarmDelay",
+    Callback = function(Value)
+        farmDelay = Value
+    end,
+})
+
+-- Status
+Tab:CreateLabel("Stand on an island → Click Scan → Select mob → Turn Auto Farm ON")
