@@ -120,268 +120,81 @@ Tab:CreateToggle({
     end,
 })
 
-task.wait(0.5)
-local Tab = Window:CreateTab("Auto Quest + Farm", 4483362458) -- Title, Image
-
 -- =====================================
--- MULTI-ENEMY AUTO TELEPORT FARMER
--- Uses workspace.Mobs instead of _ENEMIES/Server
+-- SCAN & SHOW EVERYTHING IN workspace.Machines
 -- =====================================
 
--- Global variables
-local selectedEnemyNames = {}
-local nameToIdsMap = {}           -- if your mobs use special IDs/hexes
-local currentTarget = nil         -- {part, dist, etc.}
+local machinesFolder = workspace:WaitForChild("Machines")
 
--- Function to get all unique enemy names from workspace.Mobs
-local function getAllEnemyNames()
-    local uniqueNames = {}
-    local nameToIds = {}  -- for special IDs if needed
-    local seen = {}
+-- Function to get all unique child names
+local function getMachinesList()
+    local names = {}
+    local seen = {}  -- remove duplicates
 
-    local mobsFolder = workspace:FindFirstChild("Mobs")
-    if not mobsFolder then
-        warn("workspace.Mobs not found!")
-        return {"No enemies found"}, {}
+    for _, child in ipairs(machinesFolder:GetChildren()) do
+        local name = child.Name
+        if name and not seen[name] then
+            seen[name] = true
+            table.insert(names, name)
+        end
     end
 
-    -- Scan all subfolders or direct children
-    for _, worldFolder in ipairs(mobsFolder:GetChildren()) do
-        if worldFolder:IsA("Folder") then
-            for _, enemy in ipairs(worldFolder:GetChildren()) do
-                if enemy:IsA("BasePart") or enemy:IsA("Model") then
-                    local name = enemy.Name
-                    -- Optional: strip numbers/clones if desired
-                    -- local baseName = name:gsub("_%d+$", ""):gsub("Clone", "")
-                    local baseName = name  -- keep full name for now
+    table.sort(names)
+    
+    if #names == 0 then
+        table.insert(names, "No machines found")
+    end
+    
+    return names
+end
 
-                    if not seen[baseName] then
-                        seen[baseName] = true
-                        table.insert(uniqueNames, baseName)
-                    end
-
-                    -- If you need ID mapping (hexes, etc.)
-                    if not nameToIds[baseName] then
-                        nameToIds[baseName] = {}
-                    end
-                    table.insert(nameToIds[baseName], enemy.Name)
+-- Dropdown to display all items
+local MachinesDropdown = Tab:CreateDropdown({
+    Name = "Machines in workspace.Machines",
+    Options = getMachinesList(),
+    CurrentOption = {"None"},
+    MultipleOptions = false,
+    Flag = "MachinesDropdown",
+    
+    Callback = function(Option)
+        local selected = Option[1]
+        if selected and selected ~= "No machines found" then
+            Rayfield:Notify({
+                Title = "Machine Selected",
+                Content = selected,
+                Duration = 3
+            })
+            print("Selected machine:", selected)
+            
+            -- Optional: Highlight or print info about the selected machine
+            local machine = machinesFolder:FindFirstChild(selected)
+            if machine then
+                print("Found:", machine:GetFullName())
+                if machine:IsA("BasePart") then
+                    print("Position:", machine.Position)
                 end
             end
-        end
-    end
-
-    table.sort(uniqueNames)
-    if #uniqueNames == 0 then
-        table.insert(uniqueNames, "No enemies found")
-    end
-
-    return uniqueNames, nameToIds
-end
-
--- Check if enemy is alive (customize this based on your game)
-local function isEnemyAlive(enemy)
-    if enemy:IsA("BasePart") then
-        return enemy.Parent and enemy.Parent.Parent  -- still exists
-    elseif enemy:IsA("Model") then
-        local humanoid = enemy:FindFirstChildOfClass("Humanoid")
-        return humanoid and humanoid.Health > 0
-    end
-    return false
-end
-
--- Dropdown (multi-select)
-local EnemyDropdown = Tab:CreateDropdown({
-    Name = "Select Enemy Types",
-    Options = getAllEnemyNames(),  -- initial call
-    CurrentOption = {"None"},
-    MultipleOptions = true,
-    Flag = "EnemyTypeDropdown",
-    
-    Callback = function(selectedTable)
-        selectedEnemyNames = selectedTable or {}
-        
-        -- Clean "None" if it's the only thing
-        if #selectedEnemyNames == 1 and selectedEnemyNames[1] == "None" then
-            selectedEnemyNames = {}
-        end
-        
-        if #selectedEnemyNames == 0 then
-            currentTarget = nil
-            print("No enemies selected")
-        else
-            print("Selected enemies:", table.concat(selectedEnemyNames, ", "))
         end
     end,
 })
 
 -- Refresh button
 Tab:CreateButton({
-    Name = "Refresh Enemy Names",
+    Name = "Refresh Machines List",
     Callback = function()
-        local newOptions, newMap = getAllEnemyNames()
-        nameToIdsMap = newMap
-        EnemyDropdown:Refresh(newOptions, true)
-        EnemyDropdown:Set({"None"})  -- reset selection
-        print("Enemy list refreshed")
+        local newOptions = getMachinesList()
+        MachinesDropdown:Refresh(newOptions, true)
+        Rayfield:Notify({
+            Title = "Machines Refreshed",
+            Content = #newOptions .. " unique items found",
+            Duration = 3
+        })
     end,
 })
 
--- Get all alive enemies from selected types, sorted by distance
-local function getAliveEnemies()
-    if #selectedEnemyNames == 0 then
-        return {}
-    end
+-- Optional status label
+Tab:CreateLabel("Click Refresh to scan workspace.Machines")
 
-    local mobsFolder = workspace:FindFirstChild("Mobs")
-    if not mobsFolder then return {} end
+task.wait(0.5)
+local Tab = Window:CreateTab("Auto Quest + Farm", 4483362458) -- Title, Image
 
-    local player = game.Players.LocalPlayer
-    local character = player.Character
-    local hrp = character and character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return {} end
-
-    local allAlive = {}
-
-    for _, selectedName in ipairs(selectedEnemyNames) do
-        if selectedName ~= "None" then
-            -- If using hex/ID mapping (optional)
-            local ids = nameToIdsMap[selectedName] or {selectedName}
-
-            for _, id in ipairs(ids) do
-                -- Search all world folders or direct children
-                for _, worldFolder in ipairs(mobsFolder:GetChildren()) do
-                    local enemy = worldFolder:FindFirstChild(id)
-                    if enemy and (enemy:IsA("BasePart") or enemy:IsA("Model")) and isEnemyAlive(enemy) then
-                        local dist = (hrp.Position - enemy.PrimaryPart.Position).Magnitude
-                        table.insert(allAlive, {
-                            part = enemy.PrimaryPart or enemy,
-                            name = id,
-                            dist = dist,
-                            world = worldFolder.Name
-                        })
-                    end
-                end
-            end
-        end
-    end
-
-    table.sort(allAlive, function(a, b) return a.dist < b.dist end)
-    return allAlive
-end
-
--- Teleport function
-local function teleportToEnemy(hrp, enemyData)
-    if not hrp or not enemyData or not enemyData.part then return false end
-    if not isEnemyAlive(enemyData.part.Parent) then return false end
-
-    local targetCFrame = enemyData.part.CFrame * CFrame.new(0, 3, -5)  -- in front
-    hrp.CFrame = targetCFrame
-    return true
-end
-
--- Auto Enemies Toggle
-local AutoEnemiesToggle = Tab:CreateToggle({
-    Name = "Auto Enemies (All Types)",
-    CurrentValue = false,
-    Flag = "AutoTeleportAllType",
-    
-    Callback = function(Value)
-        getgenv().AutoTeleportAllType = Value
-        
-        if Value then
-            task.spawn(function()
-                local lastRefreshTime = 0
-                
-                -- Optional raid check (customize)
-                local function isInRaid()
-                    -- Example: check if player is in raid via workspace or GUI
-                    local raidFolder = workspace:FindFirstChild("Raid") or workspace:FindFirstChild("Players")
-                    return raidFolder and raidFolder:FindFirstChild(player.UserId)
-                end
-                
-                while getgenv().AutoTeleportAllType do
-                    if #selectedEnemyNames == 0 then
-                        task.wait(0.5)
-                        continue
-                    end
-                    
-                    local char = player.Character
-                    if not char then
-                        task.wait(0.5)
-                        continue
-                    end
-                    
-                    local hrp = char:FindFirstChild("HumanoidRootPart")
-                    if not hrp then
-                        task.wait(0.5)
-                        continue
-                    end
-                    
-                    if isInRaid() then
-                        task.wait(1)
-                        continue
-                    end
-                    
-                    -- Refresh enemy list every ~3s
-                    local now = tick()
-                    if now - lastRefreshTime > 3 then
-                        local _, newMap = getAllEnemyNames()
-                        nameToIdsMap = newMap
-                        lastRefreshTime = now
-                    end
-                    
-                    local aliveEnemies = getAliveEnemies()
-                    
-                    -- Keep current target if still alive
-                    if currentTarget then
-                        local stillAlive = false
-                        for _, e in ipairs(aliveEnemies) do
-                            if e.name == currentTarget.name then
-                                currentTarget = e
-                                stillAlive = true
-                                break
-                            end
-                        end
-                        if not stillAlive then
-                            currentTarget = nil
-                        end
-                    end
-                    
-                    -- Pick new closest if none
-                    if not currentTarget and #aliveEnemies > 0 then
-                        currentTarget = aliveEnemies[1]
-                    end
-                    
-                    if not currentTarget then
-                        task.wait(0.5)
-                        continue
-                    end
-                    
-                    if not isEnemyAlive(currentTarget.part.Parent) then
-                        currentTarget = nil
-                        task.wait(0.2)
-                        continue
-                    end
-                    
-                    currentTarget.dist = (hrp.Position - currentTarget.part.Position).Magnitude
-                    
-                    if currentTarget.dist < 8 then
-                        task.wait(0.4)  -- already close
-                    else
-                        teleportToEnemy(hrp, currentTarget)
-                        task.wait(0.3)
-                    end
-                end
-                
-                currentTarget = nil
-            end)
-        else
-            currentTarget = nil
-            Rayfield:Notify({
-                Title = "Auto Enemies",
-                Content = "Stopped.",
-                Duration = 3
-            })
-        end
-    end,
-})
