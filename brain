@@ -124,73 +124,82 @@ task.wait(0.5)
 local Tab = Window:CreateTab("Auto Quest + Farm", 4483362458) -- Title, Image
 
 -- Paste this inside your Tab (e.g. after creating the Tab)
--- It will create a dropdown showing every unique mob name in workspace.MobSpawns.Nomek
+-- Dropdown shows UNIQUE mob types only (e.g. "Brulo", "Cell", "Frieza" instead of every _1, _2, etc.)
 
 local nomekFolder = workspace:WaitForChild("MobSpawns"):WaitForChild("Nomek")
 
--- Function to get all mob names (sorted)
-local function getMobNames()
-    local names = {}
-    local seen = {}  -- avoid duplicates
+-- Function to get unique mob base names
+local function getUniqueMobTypes()
+    local uniqueTypes = {}
+    local seen = {}  -- prevent duplicates
 
     for _, part in ipairs(nomekFolder:GetChildren()) do
         if part:IsA("BasePart") then
-            local name = part.Name
-            if not seen[name] then
-                seen[name] = true
-                table.insert(names, name)
+            -- Remove common suffixes: _number, (Clone), Clone, etc.
+            local baseName = part.Name
+                :gsub("_%d+$", "")          -- Brulo_1 → Brulo
+                :gsub(" %b()$", "")         -- Brulo (Clone) → Brulo
+                :gsub("Clone$", "")         -- BruloClone → Brulo
+                :match("^%s*(.-)%s*$")      -- trim spaces
+
+            if baseName and baseName ~= "" and not seen[baseName] then
+                seen[baseName] = true
+                table.insert(uniqueTypes, baseName)
             end
         end
     end
 
-    table.sort(names)
+    table.sort(uniqueTypes)
     
-    if #names == 0 then
-        table.insert(names, "No mobs found in Nomek")
+    if #uniqueTypes == 0 then
+        table.insert(uniqueTypes, "No mob types found in Nomek")
     end
     
-    return names
+    return uniqueTypes
 end
 
--- Create the dropdown
-local MobDropdown = Tab:CreateDropdown({
-    Name = "Nomek Mobs",
-    Options = getMobNames(),
+-- Create the dropdown with unique types
+local MobTypeDropdown = Tab:CreateDropdown({
+    Name = "Nomek Mob Types",
+    Options = getUniqueMobTypes(),
     CurrentOption = {},
     MultipleOptions = false,
-    Flag = "NomekMobSelect",
+    Flag = "NomekMobTypeSelect",
+    
     Callback = function(Option)
-        local selectedMob = Option[1]  -- Rayfield passes table {value}
+        local selectedType = Option[1]  -- Rayfield passes {selected_value}
         
-        if selectedMob and selectedMob ~= "No mobs found in Nomek" then
+        if selectedType and selectedType ~= "No mob types found in Nomek" then
             Rayfield:Notify({
-                Title = "Mob Selected",
-                Content = "Now targeting: " .. selectedMob,
+                Title = "Mob Type Selected",
+                Content = "Targeting all: " .. selectedType,
                 Duration = 3
             })
-            print("Selected mob:", selectedMob)
+            print("Selected mob type:", selectedType)
             
-            -- Optional: Do something with the selected mob, e.g. teleport
-            -- local mobPart = nomekFolder:FindFirstChild(selectedMob)
-            -- if mobPart then
-            --     local char = player.Character
-            --     if char and char.PrimaryPart then
-            --         char:PivotTo(mobPart.CFrame + Vector3.new(0, 5, 0))
-            --     end
-            -- end
+            -- Optional: Example action - print how many spawns of this type exist
+            local count = 0
+            for _, part in ipairs(nomekFolder:GetChildren()) do
+                if part:IsA("BasePart") and part.Name:match("^" .. selectedType .. "(_%d+)?$") then
+                    count = count + 1
+                end
+            end
+            print("Found " .. count .. " spawns of " .. selectedType)
+            
+            -- You can add teleport, highlight, etc. here later
         end
     end,
 })
 
--- Optional: Refresh button so you can update if new mobs spawn
+-- Refresh button to update if new mob types appear
 Tab:CreateButton({
-    Name = "Refresh Mob List",
+    Name = "Refresh Mob Types",
     Callback = function()
-        local newOptions = getMobNames()
-        MobDropdown:Refresh(newOptions, true)  -- true = clear old options
+        local newOptions = getUniqueMobTypes()
+        MobTypeDropdown:Refresh(newOptions, true)  -- true = clear old list first
         Rayfield:Notify({
-            Title = "Mob List Refreshed",
-            Content = #newOptions .. " mobs found in Nomek",
+            Title = "Mob Types Refreshed",
+            Content = #newOptions .. " unique types found in Nomek",
             Duration = 3
         })
     end,
