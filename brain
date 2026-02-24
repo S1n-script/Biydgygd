@@ -66,6 +66,69 @@ local ClickToggle = MainTab:CreateToggle({
 task.wait(0.5)
 local Tab = Window:CreateTab("Misc", 4483362458) -- Title, Image
 
+-- =====================================
+-- AUTO BUY BEST TITLE TOGGLE
+-- =====================================
+
+local autoBuyTitleEnabled = false
+
+local AutoTitleToggle = MainTab:CreateToggle({
+    Name = "Auto Buy Best Title",
+    CurrentValue = false,
+    Flag = "AutoBuyTitle",
+    
+    Callback = function(Value)
+        autoBuyTitleEnabled = Value
+        
+        if Value then
+            Rayfield:Notify({
+                Title = "Auto Buy Titles",
+                Content = "Trying to buy the best available title every 30s...",
+                Duration = 4
+            })
+            
+            task.spawn(function()
+                while autoBuyTitleEnabled do
+                    local success, err = pcall(function()
+                        -- Adjust this remote path if titles are under a different service
+                        local titlesRemote = game:GetService("ReplicatedStorage")
+                            :WaitForChild("Packages")
+                            :WaitForChild("_Index")
+                            :WaitForChild("sleitnick_knit@1.5.1")
+                            :WaitForChild("knit")
+                            :WaitForChild("Services")
+                            :WaitForChild("TitlesService")  -- Change if it's called something else (e.g. TitleService)
+                            :WaitForChild("RF")
+                            :WaitForChild("BuyBestTitle")   -- Common name - change to actual remote name if different
+                        
+                        titlesRemote:InvokeServer()  -- No args = buy best/available
+                    end)
+                    
+                    if not success then
+                        warn("Auto Buy Title error:", tostring(err))
+                        Rayfield:Notify({
+                            Title = "Auto Buy Failed",
+                            Content = "Remote error – stopping. Check console.",
+                            Duration = 6
+                        })
+                        autoBuyTitleEnabled = false
+                        break
+                    end
+                    
+                    task.wait(30)  -- Safe delay – adjust to 15–60s based on rate limits
+                end
+            end)
+        else
+            Rayfield:Notify({
+                Title = "Auto Buy Titles",
+                Content = "Stopped.",
+                Duration = 3
+            })
+        end
+    end,
+})
+
+
 Tab:CreateToggle({
     Name = "Auto Rank Up",  -- Changed from "Auto Ascension"
     CurrentValue = false,
