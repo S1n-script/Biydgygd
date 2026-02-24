@@ -64,7 +64,6 @@ local ClickToggle = MainTab:CreateToggle({
 -- Misc Tab
 local MiscTab = Window:CreateTab("Misc", 4483362458)
 
--- Auto Buy Best Title Toggle (on MiscTab)
 local autoBuyTitleEnabled = false
 
 local AutoTitleToggle = MiscTab:CreateToggle({
@@ -78,38 +77,74 @@ local AutoTitleToggle = MiscTab:CreateToggle({
         if Value then
             Rayfield:Notify({
                 Title = "Auto Buy Titles",
-                Content = "Trying to buy the best available title every 30s...",
+                Content = "Trying to buy best/available title every 30s...",
                 Duration = 4
             })
             
             task.spawn(function()
+                local remotePath = game:GetService("ReplicatedStorage")
+                    :WaitForChild("Packages")
+                    :WaitForChild("_Index")
+                    :WaitForChild("sleitnick_knit@1.5.1")
+                    :WaitForChild("knit")
+                    :WaitForChild("Services")
+                
+                -- Try common title service names (most likely one of these)
+                local possibleServices = {"TitlesService", "TitleService", "PlayerTitlesService", "CustomizationService"}
+                local titlesRemote = nil
+                
+                for _, svcName in ipairs(possibleServices) do
+                    local svc = remotePath:FindFirstChild(svcName)
+                    if svc then
+                        local rf = svc:FindFirstChild("RF")
+                        if rf then
+                            -- Common remote names for buying titles
+                            local possibleRemotes = {"PurchaseTitle", "BuyTitle", "UnlockTitle", "EquipBestTitle", "ClaimBest", "BuyBest"}
+                            for _, remName in ipairs(possibleRemotes) do
+                                local rem = rf:FindFirstChild(remName)
+                                if rem and rem:IsA("RemoteFunction") then
+                                    titlesRemote = rem
+                                    print("Found title remote:", svcName .. ".RF." .. remName)
+                                    break
+                                end
+                            end
+                        end
+                        if titlesRemote then break end
+                    end
+                end
+                
+                if not titlesRemote then
+                    Rayfield:Notify({
+                        Title = "Auto Buy Failed",
+                        Content = "Could not find Titles remote. Check console for path.",
+                        Duration = 8
+                    })
+                    autoBuyTitleEnabled = false
+                    return
+                end
+                
+                -- Main loop
                 while autoBuyTitleEnabled do
-                    local success, err = pcall(function()
-                        local titlesRemote = game:GetService("ReplicatedStorage")
-                            :WaitForChild("Packages")
-                            :WaitForChild("_Index")
-                            :WaitForChild("sleitnick_knit@1.5.1")
-                            :WaitForChild("knit")
-                            :WaitForChild("Services")
-                            :WaitForChild("TitlesService")
-                            :WaitForChild("RF")
-                            :WaitForChild("BuyBestTitle")
-                        
-                        titlesRemote:InvokeServer()
+                    local success, result = pcall(function()
+                        -- Try with no args first (most common)
+                        return titlesRemote:InvokeServer()
                     end)
                     
-                    if not success then
-                        warn("Auto Buy Title error:", tostring(err))
+                    if success then
+                        print("Title buy attempt success:", tostring(result))
+                        -- If game returns something useful, you can check for "already max" here later
+                    else
+                        warn("Title buy error:", tostring(result))
                         Rayfield:Notify({
-                            Title = "Auto Buy Failed",
-                            Content = "Remote error – stopping. Check console.",
+                            Title = "Auto Buy Error",
+                            Content = "Failed to buy title – stopping loop. Check console.",
                             Duration = 6
                         })
                         autoBuyTitleEnabled = false
                         break
                     end
                     
-                    task.wait(30)
+                    task.wait(30)  -- Safe delay
                 end
             end)
         else
@@ -435,7 +470,7 @@ FarmTab:CreateButton({
     end,
 })
 
--- Auto Farm Toggle - FIXED TP using workspace.Players HRP
+-- Auto Farm Toggle - FIXED with workspace.Players HRP + respawn support
 FarmTab:CreateToggle({
     Name = "Auto Farm Selected Mob",
     CurrentValue = false,
@@ -463,8 +498,8 @@ FarmTab:CreateToggle({
             
             task.spawn(function()
                 while autoFarmEnabled do
-                    -- Get character from workspace.Players (your game's structure)
-                    local playersFolder = workspace:WaitForChild("Players", 5)
+                    -- Get character from workspace.Players (fixed path)
+                    local playersFolder = workspace:FindFirstChild("Players")
                     if not playersFolder then
                         task.wait(1)
                         continue
@@ -498,9 +533,15 @@ FarmTab:CreateToggle({
                     -- Pick random target
                     local target = matches[math.random(1, #matches)]
                     
-                    -- Teleport with random offset (safe landing)
+                    -- Teleport with random offset
                     local offset = CFrame.new(math.random(-4,4), 6, math.random(-6,-2))
-                    hrp.CFrame = target.CFrame * offset
+                    local success, err = pcall(function()
+                        hrp.CFrame = target.CFrame * offset
+                    end)
+                    
+                    if not success then
+                        warn("TP failed:", tostring(err))
+                    end
                     
                     task.wait(farmDelay)
                 end
@@ -514,10 +555,35 @@ FarmTab:CreateToggle({
     end,
 })
 
+-- Add this once (outside the toggle) for respawn handling
+player.CharacterAdded:Connect(function(newChar)
+    task.wait(2)  -- Wait for full load
+    if autoFarmEnabled then
+        -- Re-trigger a TP on respawn
+        if selectedMobType and currentMobFolder then
+            local matches = {}
+            for _, mob in ipairs(currentMobFolder:GetChildren()) do
+                if mob:IsA("BasePart") and mob.Name:match("^" .. selectedMobType .. "(_%d+)?$") then
+                    table.insert(matches, mob)
+                end
+            end
+            
+            if #matches > 0 then
+                local target = matches[math.random(1, #matches)]
+                local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
+                if hrp then
+                    local offset = CFrame.new(math.random(-4,4), 6, math.random(-6,-2))
+                    hrp.CFrame = target.CFrame * offset
+                end
+            end
+        end
+    end
+end)
+
 -- Delay slider
 FarmTab:CreateSlider({
     Name = "Teleport Delay",
-    Range = {3, 12},
+    Range = {1, 12},
     Increment = 0.5,
     Suffix = "seconds",
     CurrentValue = 5,
