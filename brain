@@ -63,9 +63,6 @@ local ClickToggle = MainTab:CreateToggle({
     end,
 })
 
--- Misc Tab
-local MiscTab = Window:CreateTab("Misc", 4483362458)
-
 -- Auto Rank Up Toggle (on MiscTab)
 local AutoRankUpToggle = MiscTab:CreateToggle({
     Name = "Auto Rank Up",
@@ -121,6 +118,118 @@ local AutoRankUpToggle = MiscTab:CreateToggle({
     end,
 })
 
+
+-- Misc Tab
+local MiscTab = Window:CreateTab("Misc", 4483362458)
+
+local rerollTypes = {
+    "Saiyan",
+    "Dragon",
+    "Chakra",
+    "Jinchuriki",
+    "Haki",
+    "Devil",
+    "Reiatsu",
+    "Voltstanding",
+    "Breathing",
+    "Demon Art",
+    "Curse",
+    "Cursed Technique"
+}
+
+-- Dropdown (single selection for simplicity - change to MultipleOptions = true if you want multi)
+local selectedReroll = "Saiyan"  -- default
+
+local RerollDropdown = Tab:CreateDropdown({
+    Name = "Select Reroll",
+    Options = rerollTypes,
+    CurrentOption = {"Saiyan"},
+    MultipleOptions = false,
+    Flag = "RerollType",
+    Callback = function(option)
+        selectedReroll = option[1]
+        Rayfield:Notify({
+            Title = "Reroll Updated",
+            Content = "Now set to: " .. selectedReroll,
+            Duration = 3,
+            Image = 4483362458
+        })
+    end,
+})
+
+-- Toggle for auto-reroll loop
+local autoRerollEnabled = false
+
+local AutoRerollToggle = Tab:CreateToggle({
+    Name = "Auto Reroll",
+    CurrentValue = false,
+    Flag = "AutoReroll",
+    Callback = function(Value)
+        autoRerollEnabled = Value
+        
+        if Value then
+            Rayfield:Notify({
+                Title = "Auto Reroll Started",
+                Content = "Rerolling " .. selectedReroll .. " ",
+                Duration = 1
+            })
+            
+            task.spawn(function()
+                local ReplicatedStorage = game:GetService("ReplicatedStorage")
+                local RerollRF
+                
+                -- Safe path to the RemoteFunction
+                local success, err = pcall(function()
+                    local knit = ReplicatedStorage:WaitForChild("Packages", 8)
+                        :WaitForChild("_Index", 8)
+                        :WaitForChild("sleitnick_knit@1.5.1", 8)
+                        :WaitForChild("knit", 8)
+                        :WaitForChild("Services", 8)
+                        :WaitForChild("RerollableService", 8)
+                        :WaitForChild("RF", 8)
+                        :WaitForChild("Reroll", 8)
+                    RerollRF = knit
+                end)
+                
+                if not success or not RerollRF then
+                    Rayfield:Notify({
+                        Title = "Error",
+                        Content = "Could not find Reroll RemoteFunction.\nCheck game path or anti-exploit.",
+                        Duration = 1
+                    })
+                    autoRerollEnabled = false
+                    AutoRerollToggle:Set(false)
+                    return
+                end
+                
+                while autoRerollEnabled do
+                    local args = { selectedReroll }
+                    
+                    local success, result = pcall(function()
+                        return RerollRF:InvokeServer(unpack(args))
+                    end)
+                    
+                    if success then
+                        print("Reroll attempted for: " .. selectedReroll .. " → Result: " .. tostring(result))
+                    else
+                        warn("Reroll failed: " .. tostring(result))
+                    end
+                    
+                    -- Adjust delay based on your needs (anti-kick / rate-limit friendly)
+                    task.wait(3.5 + math.random(0.5, 2))  -- ~3.5–5.5 seconds
+                end
+            end)
+        else
+            Rayfield:Notify({
+                Title = "Auto Reroll Stopped",
+                Content = "Loop paused.",
+                Duration = 1
+            })
+        end
+    end,
+})
+
+
 -- =====================================
 -- Machines Dropdown with AUTO-TELEPORT on Selection
 -- =====================================
@@ -168,7 +277,7 @@ local MachinesDropdown = MiscTab:CreateDropdown({
         Rayfield:Notify({
             Title = "Teleporting...",
             Content = "Moving to: " .. selectedMachine,
-            Duration = 3
+            Duration = 1
         })
         print("Auto-TP to machine:", selectedMachine)
         
@@ -178,7 +287,7 @@ local MachinesDropdown = MiscTab:CreateDropdown({
             Rayfield:Notify({
                 Title = "Error",
                 Content = selectedMachine .. " not found",
-                Duration = 4
+                Duration = 1
             })
             return
         end
@@ -225,7 +334,7 @@ local MachinesDropdown = MiscTab:CreateDropdown({
             Rayfield:Notify({
                 Title = "Teleport Failed",
                 Content = "Check console for error",
-                Duration = 4
+                Duration = 1
             })
         end
     end,
@@ -241,7 +350,7 @@ MiscTab:CreateButton({
         Rayfield:Notify({
             Title = "Refreshed",
             Content = #newOptions .. " machines found",
-            Duration = 3
+            Duration = 1
         })
     end,
 })
