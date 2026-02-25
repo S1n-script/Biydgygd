@@ -216,7 +216,7 @@ MiscTab:CreateButton({
             return
         end
         
-        local playerChar = playerFolder:FindFirstChild(player.Name)
+        local playerChar = playerFolder:FindFirstChild(Player.Name)
         if not playerChar then
             Rayfield:Notify({
                 Title = "Error",
