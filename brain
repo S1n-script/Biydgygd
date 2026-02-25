@@ -269,8 +269,8 @@ local function detectCurrentMap()
     
     local root = character:FindFirstChild("HumanoidRootPart")
     if not root then return nil end
-    
-    local playerPos = root.Position
+    s
+local playerPos = root.Position
     local closestMapName = nil
     local minAvgDist = math.huge
     
@@ -332,7 +332,7 @@ local MobDropdown = FarmTab:CreateDropdown({
     Name = "Mobs on Current Map",
     Options = {"Scan map first"},
     CurrentOption = {"Scan map first"},
-    MultipleOptions = false,
+    MultipleOptions = true,
     Flag = "CurrentMapMobs",
     
     Callback = function(Option)
@@ -371,7 +371,7 @@ FarmTab:CreateButton({
             MobDropdown:Refresh({"Scan map first"}, true)
         end
     end,
-})
+})    
 
 
 -- Auto Farm Toggle - ULTIMATE FIXED VERSION for workspace.Players HRP
@@ -521,3 +521,114 @@ FarmTab:CreateSlider({
         farmDelay = Value
     end,
 })
+
+-- LocalScript (put in StarterGui / StarterPlayerScripts / inside a ScreenGui, etc.)
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- ───────────────────────────────────────────────────────────────
+--  Configuration - change these to match your UI
+-- ───────────────────────────────────────────────────────────────
+
+local SCREEN_GUI_NAME     = "GameModeSelector"     -- name of your ScreenGui
+local DROPDOWN_FRAME_NAME = "DropDownFrame"
+local BUTTON_NAME         = "SelectedModeButton"
+local SCROLL_FRAME_NAME   = "ScrollingFrame"
+local TEMPLATE_NAME       = "ModeTemplate"          -- the TextButton/Frame template inside ScrollingFrame
+
+-- ───────────────────────────────────────────────────────────────
+
+local gui = playerGui:WaitForChild(SCREEN_GUI_NAME, 10)
+if not gui then
+	warn("ScreenGui '" .. SCREEN_GUI_NAME .. "' not found!")
+	return
+end
+
+local dropdown = gui:WaitForChild(DROPDOWN_FRAME_NAME)
+local mainButton = dropdown:WaitForChild(BUTTON_NAME)
+local scrollingFrame = dropdown:WaitForChild(SCROLL_FRAME_NAME)
+local template = scrollingFrame:WaitForChild(TEMPLATE_NAME)
+
+-- Hide template
+template.Visible = false
+
+local gamemodesFolder = ReplicatedStorage:WaitForChild("Gamemodes")
+
+-- Clear old buttons (useful when developing / hot-reloading)
+for _, child in scrollingFrame:GetChildren() do
+	if child:IsA("GuiButton") and child ~= template then
+		child:Destroy()
+	end
+end
+
+-- Populate dropdown
+local function refreshGamemodes()
+	local modes = gamemodesFolder:GetChildren()
+	
+	-- Optional: sort alphabetically
+	table.sort(modes, function(a,b)
+		return a.Name < b.Name
+	end)
+	
+	for _, mode in modes do
+		local btn = template:Clone()
+		btn.Name = mode.Name
+		btn.Visible = true
+		
+		-- Most common cases:
+		if btn:FindFirstChildWhichIsA("TextLabel") then
+			btn:FindFirstChildWhichIsA("TextLabel").Text = mode.Name
+		else
+			btn.Text = mode.Name   -- if the button itself has the text
+		end
+		
+		-- When user clicks a mode
+		btn.MouseButton1Click:Connect(function()
+			mainButton.Text = mode.Name
+			-- Optional: fire remote event, set _G variable, etc.
+			-- Example:
+			-- game:GetService("ReplicatedStorage").SetGameMode:FireServer(mode.Name)
+			
+			-- Close dropdown (most common behavior)
+			scrollingFrame.Visible = false
+		end)
+		
+		btn.Parent = scrollingFrame
+	end
+	
+	-- Auto-size canvas (good practice)
+	scrollingFrame.CanvasSize = UDim2.fromOffset(0, #modes * (template.AbsoluteSize.Y + 4))
+end
+
+-- Initial population
+refreshGamemodes()
+
+-- Optional: listen for new gamemodes added/removed during gameplay
+gamemodesFolder.ChildAdded:Connect(refreshGamemodes)
+gamemodesFolder.ChildRemoved:Connect(refreshGamemodes)
+
+-- Toggle dropdown when clicking the main button
+mainButton.MouseButton1Click:Connect(function()
+	scrollingFrame.Visible = not scrollingFrame.Visible
+end)
+
+-- Optional: close dropdown when clicking outside
+local function isDescendantOfDropdown(guiObj)
+	return guiObj and (guiObj == dropdown or guiObj:IsDescendantOf(dropdown))
+end
+
+gui.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		local mousePos = input.Position
+		local target = playerGui:GetGuiObjectsAtPosition(mousePos.X, mousePos.Y)[1]
+		
+		if target and not isDescendantOfDropdown(target) then
+			scrollingFrame.Visible = false
+		end
+	end
+end)
