@@ -374,7 +374,7 @@ FarmTab:CreateButton({
 })
 
 
--- Auto Farm Toggle - FIXED with correct HRP from player.Character + safety
+-- Auto Farm Toggle - ULTIMATE FIXED VERSION for workspace.Players HRP
 FarmTab:CreateToggle({
     Name = "Auto Farm Selected Mob",
     CurrentValue = false,
@@ -402,16 +402,29 @@ FarmTab:CreateToggle({
             
             task.spawn(function()
                 while autoFarmEnabled do
-                    -- Get player, character, HRP (fixed & safe)
-                    local player = game.Players.LocalPlayer
-                    local character = player and player.Character
-                    local hrp = character and character:FindFirstChild("HumanoidRootPart")
-                    
-                    if not hrp then
-                        print("[DEBUG] No HRP - waiting for character load")
+                    -- Get HRP from workspace.Players (your game uses this path)
+                    local playersFolder = workspace:FindFirstChild("Players")
+                    if not playersFolder then
+                        print("[DEBUG] Players folder not found - waiting")
                         task.wait(1)
                         continue
                     end
+                    
+                    local playerChar = playersFolder:WaitForChild(player.Name, 5)
+                    if not playerChar then
+                        print("[DEBUG] Character not found in Players folder - waiting")
+                        task.wait(1)
+                        continue
+                    end
+                    
+                    local hrp = playerChar:WaitForChild("HumanoidRootPart", 5)
+                    if not hrp then
+                        print("[DEBUG] No HumanoidRootPart found - waiting for character load")
+                        task.wait(1)
+                        continue
+                    end
+                    
+                    print("[DEBUG] HRP found - proceeding with TP")
                     
                     -- Find matching mob spawns
                     local matches = {}
@@ -422,18 +435,19 @@ FarmTab:CreateToggle({
                     end
                     
                     if #matches == 0 then
-                        print("[DEBUG] No matching mobs for " .. selectedMobType)
+                        print("[DEBUG] No matching mobs for " .. selectedMobType .. " - waiting")
                         task.wait(farmDelay)
                         continue
                     end
                     
-                    -- Pick random target
-                    local target = matches[math.random(1, #matches)]
+                    -- Pick random mob
+                    local targetMob = matches[math.random(1, #matches)]
+                    print("[DEBUG] Targeting:", targetMob.Name)
                     
-                    -- Use mob's CFrame directly (BasePart)
-                    local mobCFrame = target.CFrame
+                    -- Use mob CFrame directly (BasePart)
+                    local mobCFrame = targetMob.CFrame
                     
-                    -- Random offset (land nicely)
+                    -- Random offset
                     local offset = CFrame.new(math.random(-4,4), 6, math.random(-6,-2))
                     local finalCFrame = mobCFrame * offset
                     
@@ -443,7 +457,7 @@ FarmTab:CreateToggle({
                     end)
                     
                     if success then
-                        print("[SUCCESS] TP to " .. target.Name .. " at " .. tostring(finalCFrame.Position))
+                        print("[SUCCESS] TP to " .. targetMob.Name .. " at " .. tostring(finalCFrame.Position))
                     else
                         warn("[TP ERROR]: " .. tostring(err))
                     end
@@ -460,9 +474,9 @@ FarmTab:CreateToggle({
     end,
 })
 
--- Respawn handler (optional but recommended)
+-- Respawn handler - auto-TP after death
 player.CharacterAdded:Connect(function(newChar)
-    task.wait(2)  -- Wait for full load
+    task.wait(2)  -- Wait for character to fully load
     if autoFarmEnabled and selectedMobType and currentMobFolder then
         local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
         if hrp then
@@ -474,10 +488,23 @@ player.CharacterAdded:Connect(function(newChar)
             end
             
             if #matches > 0 then
-                local target = matches[math.random(1, #matches)]
+                local targetMob = matches[math.random(1, #matches)]
+                local mobCFrame = targetMob.CFrame
                 local offset = CFrame.new(math.random(-4,4), 6, math.random(-6,-2))
-                hrp.CFrame = target.CFrame * offset
+                local finalCFrame = mobCFrame * offset
+                
+                local success, err = pcall(function()
+                    hrp.CFrame = finalCFrame
+                end)
+                
+                if success then
+                    print("[RESPAWN SUCCESS] TP to " .. targetMob.Name)
+                else
+                    warn("[RESPAWN TP ERROR]: " .. tostring(err))
+                end
             end
+        else
+            warn("[RESPAWN] No HRP found on new character")
         end
     end
 end)
