@@ -64,7 +64,7 @@ local ClickToggle = MainTab:CreateToggle({
 })
 
 -- Auto Rank Up Toggle (on MiscTab)
-local AutoRankUpToggle = MiscTab:CreateToggle({
+local AutoRankUpToggle = MainTab:CreateToggle({
     Name = "Auto Rank Up",
     CurrentValue = false,
     Flag = "AutoRankUp",
