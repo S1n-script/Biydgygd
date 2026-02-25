@@ -119,8 +119,12 @@ local AutoRankUpToggle = MiscTab:CreateToggle({
     end,
 })
 
--- Machines Teleport Section (on MiscTab)
+-- =====================================
+-- Machines Dropdown with AUTO-TELEPORT on Selection
+-- =====================================
+
 local machinesFolder = workspace:WaitForChild("Machines")
+local player = game.Players.LocalPlayer
 
 local function getMachineNames()
     local names = {}
@@ -143,100 +147,60 @@ local function getMachineNames()
     return names
 end
 
-local selectedMachine = nil
-
+-- Dropdown - Teleports instantly on selection
 local MachinesDropdown = MiscTab:CreateDropdown({
-    Name = "Select Machine",
+    Name = "Select Machine (Auto-TP)",
     Options = getMachineNames(),
     CurrentOption = {"None"},
     MultipleOptions = false,
     Flag = "MachineTPDropdown",
     
     Callback = function(Option)
-        selectedMachine = Option and Option[1]
+        local selectedMachine = Option and Option[1]  -- Extract string
         
-        if selectedMachine and selectedMachine ~= "No machines found" and selectedMachine ~= "None" then
-            Rayfield:Notify({
-                Title = "Selected",
-                Content = "Ready to TP: " .. selectedMachine,
-                Duration = 3
-            })
-            print("Selected machine:", selectedMachine)
-        else
-            selectedMachine = nil
+        if not selectedMachine or selectedMachine == "No machines found" or selectedMachine == "None" then
+            return  -- Do nothing if invalid
         end
-    end,
-})
-
-MiscTab:CreateButton({
-    Name = "Refresh Machines",
-    Callback = function()
-        local newOptions = getMachineNames()
-        MachinesDropdown:Refresh(newOptions, true)
-        MachinesDropdown:Set({"None"})
-        selectedMachine = nil
+        
+        -- Notify selection
         Rayfield:Notify({
-            Title = "Refreshed",
-            Content = #newOptions .. " machines found",
+            Title = "Teleporting...",
+            Content = "Moving to: " .. selectedMachine,
             Duration = 3
         })
-    end,
-})
-
-MiscTab:CreateButton({
-    Name = "Teleport",
-    Callback = function()
-        -- FIXED: Make sure selectedMachine is a string (not table/nil)
-        if not selectedMachine or selectedMachine == "No machines found" or selectedMachine == "None" then
-            Rayfield:Notify({
-                Title = "Error",
-                Content = "Select a machine from the dropdown first!",
-                Duration = 4
-            })
-            return
-        end
+        print("Auto-TP to machine:", selectedMachine)
         
+        -- Find the machine
         local machine = machinesFolder:FindFirstChild(selectedMachine)
         if not machine then
             Rayfield:Notify({
                 Title = "Error",
-                Content = selectedMachine .. " not found (may have been removed)",
+                Content = selectedMachine .. " not found",
                 Duration = 4
             })
             return
         end
         
-        local playerFolder = workspace:WaitForChild("Players", 5)
+        -- Get HRP from workspace.Players
+        local playerFolder = workspace:FindFirstChild("Players")
         if not playerFolder then
-            Rayfield:Notify({
-                Title = "Error",
-                Content = "Players folder not found",
-                Duration = 4
-            })
+            Rayfield:Notify({Title = "Error", Content = "Players folder not found", Duration = 4})
             return
         end
         
-        local playerChar = playerFolder:FindFirstChild(Player.Name)
+        local playerChar = playerFolder:FindFirstChild(player.Name)
         if not playerChar then
-            Rayfield:Notify({
-                Title = "Error",
-                Content = "Your character not found in workspace.Players",
-                Duration = 4
-            })
+            Rayfield:Notify({Title = "Error", Content = "Your character not found", Duration = 4})
             return
         end
         
         local hrp = playerChar:FindFirstChild("HumanoidRootPart")
         if not hrp then
-            Rayfield:Notify({
-                Title = "Error",
-                Content = "No HumanoidRootPart found in your character",
-                Duration = 4
-            })
+            Rayfield:Notify({Title = "Error", Content = "No HumanoidRootPart found", Duration = 4})
             return
         end
         
-        -- Get target CFrame (handles Parts + Models)
+        -- Get target CFrame (handles Parts/Models)
         local targetCFrame
         if machine.PrimaryPart then
             targetCFrame = machine.PrimaryPart.CFrame
@@ -248,17 +212,39 @@ MiscTab:CreateButton({
         end
         
         -- Teleport 5 studs above
-        hrp.CFrame = targetCFrame + Vector3.new(0, 5, 0)
+        local success, err = pcall(function()
+            hrp.CFrame = targetCFrame + Vector3.new(0, 5, 0)
+        end)
         
-        Rayfield:Notify({
-            Title = "Teleport Success!",
-            Content = "Moved to: " .. selectedMachine,
-            Duration = 4
-        })
-        
-        print("Teleported to:", selectedMachine, "at", targetCFrame.Position)
+        if success then
+            print("Auto-teleported to:", selectedMachine)
+        else
+            warn("TP failed:", tostring(err))
+            Rayfield:Notify({
+                Title = "Teleport Failed",
+                Content = "Check console for error",
+                Duration = 4
+            })
+        end
     end,
 })
+
+-- Optional: Refresh button (still useful)
+MiscTab:CreateButton({
+    Name = "Refresh Machines List",
+    Callback = function()
+        local newOptions = getMachineNames()
+        MachinesDropdown:Refresh(newOptions, true)
+        MachinesDropdown:Set({"None"})
+        Rayfield:Notify({
+            Title = "Refreshed",
+            Content = #newOptions .. " machines found",
+            Duration = 3
+        })
+    end,
+})
+
+MiscTab:CreateLabel("Select a machine → Auto-teleports instantly")
 
 -- =====================================
 -- AUTO FARM - Detects current map from workspace.Maps + Mobs from MobSpawns
