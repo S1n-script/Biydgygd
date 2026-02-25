@@ -140,7 +140,7 @@ local rerollTypes = {
 -- Dropdown (single selection for simplicity - change to MultipleOptions = true if you want multi)
 local selectedReroll = "Saiyan"  -- default
 
-local RerollDropdown = Tab:CreateDropdown({
+local RerollDropdown = MiscTab:CreateDropdown({
     Name = "Select Reroll",
     Options = rerollTypes,
     CurrentOption = {"Saiyan"},
@@ -160,7 +160,7 @@ local RerollDropdown = Tab:CreateDropdown({
 -- Toggle for auto-reroll loop
 local autoRerollEnabled = false
 
-local AutoRerollToggle = Tab:CreateToggle({
+local AutoRerollToggle = MiscTab:CreateToggle({
     Name = "Auto Reroll",
     CurrentValue = false,
     Flag = "AutoReroll",
