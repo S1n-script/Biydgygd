@@ -119,6 +119,8 @@ local AutoRankUpToggle = MiscTab:CreateToggle({
     end,
 })
 
+local Tab = Window:CreateTab("Auto Farm", 4483362458) -- Title, Image
+
 -- =====================================
 -- Machines Dropdown with AUTO-TELEPORT on Selection
 -- =====================================
