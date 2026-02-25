@@ -658,3 +658,110 @@ FarmTab:CreateToggle({
         end
     end,
 })
+
+-- Auto Stat Upgrade (every 60 seconds) - Add this after your MainTab is created
+
+local stats = {
+    "Energy",
+    "Gems",
+    "Luck",
+    "Damage"
+}
+
+local selectedStat = "Energy"   -- default
+local autoUpgradeEnabled = false
+local UPGRADE_DELAY = 60        -- fixed 1 minute
+
+-- Dropdown for stat selection
+local StatDropdown = MainTab:CreateDropdown({
+    Name = "Select Stat to Upgrade",
+    Options = stats,
+    CurrentOption = {"Energy"},
+    MultipleOptions = false,
+    Flag = "AutoStatType",
+    Callback = function(option)
+        selectedStat = option[1]
+        Rayfield:Notify({
+            Title = "Stat Updated",
+            Content = "Now auto-upgrading: " .. selectedStat,
+            Duration = 4
+        })
+    end,
+})
+
+-- Toggle for auto-upgrade loop (every 60 seconds)
+MainTab:CreateToggle({
+    Name = "Auto Upgrade Stat",
+    CurrentValue = false,
+    Flag = "AutoStatUpgrade",
+    Callback = function(enabled)
+        autoUpgradeEnabled = enabled
+        
+        if enabled then
+            Rayfield:Notify({
+                Title = "Auto Upgrade Started",
+                Content = "Upgrading " .. selectedStat .. " every 60 seconds",
+                Duration = 5
+            })
+            
+            task.spawn(function()
+                local ReplicatedStorage = game:GetService("ReplicatedStorage")
+                local PutStatRF
+                
+                -- Safely get the RemoteFunction
+                local pathSuccess, pathErr = pcall(function()
+                    PutStatRF = ReplicatedStorage
+                        :WaitForChild("Packages", 8)
+                        :WaitForChild("_Index", 8)
+                        :WaitForChild("sleitnick_knit@1.5.1", 8)
+                        :WaitForChild("knit", 8)
+                        :WaitForChild("Services", 8)
+                        :WaitForChild("LevelService", 8)
+                        :WaitForChild("RF", 8)
+                        :WaitForChild("PutStat", 8)
+                end)
+                
+                if not pathSuccess or not PutStatRF then
+                    Rayfield:Notify({
+                        Title = "Error",
+                        Content = "Could not find PutStat Remote.\nPath might have changed.",
+                        Duration = 7
+                    })
+                    autoUpgradeEnabled = false
+                    return
+                end
+                
+                while autoUpgradeEnabled do
+                    local success, result = pcall(function()
+                        return PutStatRF:InvokeServer(selectedStat, 1)
+                    end)
+                    
+                    if success then
+                        print("[AutoStat] Upgraded " .. selectedStat .. " +1 → " .. tostring(result))
+                    else
+                        warn("[AutoStat] Failed: " .. tostring(result))
+                        Rayfield:Notify({
+                            Title = "Upgrade Failed",
+                            Content = "Error during stat upgrade. Check console.",
+                            Duration = 6
+                        })
+                    end
+                    
+                    task.wait(UPGRADE_DELAY)  -- exactly 60 seconds
+                end
+                
+                Rayfield:Notify({
+                    Title = "Auto Upgrade Stopped",
+                    Content = "No more upgrades for " .. selectedStat,
+                    Duration = 3
+                })
+            end)
+        else
+            Rayfield:Notify({
+                Title = "Auto Upgrade Stopped",
+                Content = "Loop paused.",
+                Duration = 3
+            })
+        end
+    end,
+})
