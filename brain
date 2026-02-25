@@ -392,102 +392,104 @@ FarmTab:CreateSlider({
 })
 
 -- =====================================
--- FIXED AUTO FARM - Uses workspace.Players HRP + MobSpawns scan
+-- FIXED AUTO FARM - Real Mobs from workspace.Mobs + Spawn Detection from MobSpawns
 -- =====================================
+
+local FarmTab = Window:CreateTab("Auto Farm", 4483362458)
 
 local player = game.Players.LocalPlayer
 local mobSpawnsFolder = workspace:WaitForChild("MobSpawns")
+local liveMobsFolder = workspace:WaitForChild("Mobs")
 
 local autoFarmEnabled = false
-local farmDelay = 5
+local farmDelay = 4.5
 local selectedMobType = nil
-local currentMobFolder = nil  -- Current island's mob folder
+local currentIslandName = nil
 
--- Detect current island folder (closest to player)
-local function detectCurrentMobFolder()
-    local character = player.Character
-    if not character then return nil end
+-- Detect current island from closest MobSpawns folder
+local function detectCurrentIsland()
+    local char = player.Character
+    if not char then return nil end
     
-    local root = character:FindFirstChild("HumanoidRootPart")
+    local root = char:FindFirstChild("HumanoidRootPart")
     if not root then return nil end
     
     local playerPos = root.Position
-    local closestFolder = nil
-    local minAvgDist = math.huge
+    local closest = nil
+    local minAvg = math.huge
     
     for _, folder in ipairs(mobSpawnsFolder:GetChildren()) do
         if folder:IsA("Folder") and #folder:GetChildren() > 0 then
-            local totalDist = 0
+            local total = 0
             local count = 0
-            
-            for _, mob in ipairs(folder:GetChildren()) do
-                if mob:IsA("BasePart") then
-                    totalDist = totalDist + (playerPos - mob.Position).Magnitude
+            for _, pt in ipairs(folder:GetChildren()) do
+                if pt:IsA("BasePart") then
+                    total = total + (playerPos - pt.Position).Magnitude
                     count = count + 1
                 end
             end
-            
             if count > 0 then
-                local avg = totalDist / count
-                if avg < minAvgDist then
-                    minAvgDist = avg
-                    closestFolder = folder
+                local avg = total / count
+                if avg < minAvg then
+                    minAvg = avg
+                    closest = folder.Name
                 end
             end
         end
     end
     
-    return closestFolder
+    return closest
 end
 
--- Get unique mob base names from folder
-local function getMobTypes(folder)
-    if not folder then return {"Scan island first"} end
+-- Get unique mob types from live Mobs folder of current island
+local function getLiveMobTypes()
+    if not currentIslandName then return {"Scan island first"} end
+    
+    local islandMobs = liveMobsFolder:FindFirstChild(currentIslandName)
+    if not islandMobs then return {"No live mobs - move around"} end
     
     local types = {}
     local seen = {}
     
-    for _, child in ipairs(folder:GetChildren()) do
-        if child:IsA("BasePart") then
-            local baseName = child.Name:gsub("_%d+$", "")  -- Remove _1, _2, etc.
-            if baseName ~= "" and not seen[baseName] then
-                seen[baseName] = true
-                table.insert(types, baseName)
-            end
+    for _, mob in ipairs(islandMobs:GetChildren()) do
+        local baseName = mob.Name:gsub("_%d+$", ""):gsub("Clone", ""):match("^%s*(.-)%s*$")
+        if baseName and baseName ~= "" and not seen[baseName] then
+            seen[baseName] = true
+            table.insert(types, baseName)
         end
     end
     
     table.sort(types)
-    return #types > 0 and types or {"No mobs on this island"}
+    return #types > 0 and types or {"No live mobs yet"}
 end
 
 -- Dropdown
 local MobDropdown = FarmTab:CreateDropdown({
-    Name = "Select Mob Type",
+    Name = "Live Mobs on Current Island",
     Options = {"Scan island first"},
-    CurrentOption = {"Scan island first"},
+    CurrentOption = {},
     MultipleOptions = false,
     Flag = "MobType",
     
     Callback = function(Option)
         selectedMobType = Option[1]
         if selectedMobType and selectedMobType ~= "Scan island first" then
-            print("Targeting:", selectedMobType)
+            print("Farm target:", selectedMobType)
         end
     end,
 })
 
--- Scan & refresh button
+-- Scan button
 FarmTab:CreateButton({
-    Name = "Scan Island & Load Mobs",
+    Name = "Scan Island & Load Live Mobs",
     Callback = function()
-        currentMobFolder = detectCurrentMobFolder()
-        if currentMobFolder then
-            local types = getMobTypes(currentMobFolder)
+        currentIslandName = detectCurrentIsland()
+        if currentIslandName then
+            local types = getLiveMobTypes()
             MobDropdown:Refresh(types, true)
             Rayfield:Notify({
-                Title = "Island Loaded",
-                Content = currentMobFolder.Name .. " (" .. #types .. " mob types)",
+                Title = "Detected: " .. currentIslandName,
+                Content = #types .. " mob types loaded",
                 Duration = 5
             })
         else
@@ -501,7 +503,7 @@ FarmTab:CreateButton({
     end,
 })
 
--- Auto Farm Toggle - Uses workspace.Players HRP
+-- Auto Farm Toggle
 FarmTab:CreateToggle({
     Name = "Auto Farm Selected Mob",
     CurrentValue = false,
@@ -511,7 +513,7 @@ FarmTab:CreateToggle({
         autoFarmEnabled = Value
         
         if Value then
-            if not selectedMobType or not currentMobFolder then
+            if not selectedMobType or not currentIslandName then
                 Rayfield:Notify({
                     Title = "Error",
                     Content = "Scan island & select mob first!",
@@ -548,10 +550,18 @@ FarmTab:CreateToggle({
                         continue
                     end
                     
-                    -- Find matching spawns
+                    -- Get live mobs folder for current island
+                    local islandMobs = liveMobsFolder:FindFirstChild(currentIslandName)
+                    if not islandMobs then
+                        task.wait(farmDelay)
+                        continue
+                    end
+                    
+                    -- Find matching live mobs
                     local matches = {}
-                    for _, mob in ipairs(currentMobFolder:GetChildren()) do
-                        if mob:IsA("BasePart") and mob.Name:match("^" .. selectedMobType .. "(_%d+)?$") then
+                    for _, mob in ipairs(islandMobs:GetChildren()) do
+                        local baseName = mob.Name:gsub("_%d+$", "")
+                        if baseName == selectedMobType and isMobAlive(mob) then  -- Add isMobAlive if needed
                             table.insert(matches, mob)
                         end
                     end
@@ -561,13 +571,14 @@ FarmTab:CreateToggle({
                         continue
                     end
                     
-                    -- Pick random target
+                    -- Pick random
                     local target = matches[math.random(1, #matches)]
+                    local targetPart = target.PrimaryPart or target:FindFirstChild("HumanoidRootPart") or target
                     
-                    -- Teleport with offset
+                    -- TP
                     local offset = CFrame.new(math.random(-4,4), 6, math.random(-6,-2))
                     local success, err = pcall(function()
-                        hrp.CFrame = target.CFrame * offset
+                        hrp.CFrame = targetPart.CFrame * offset
                     end)
                     
                     if not success then
@@ -589,7 +600,7 @@ FarmTab:CreateToggle({
 -- Delay slider
 FarmTab:CreateSlider({
     Name = "TP Delay",
-    Range = {3, 10},
+    Range = {3, 12},
     Increment = 0.5,
     Suffix = "s",
     CurrentValue = 5,
@@ -599,24 +610,3 @@ FarmTab:CreateSlider({
     end,
 })
 
--- Respawn handler (auto-TP after death)
-player.CharacterAdded:Connect(function(newChar)
-    task.wait(2)  -- Wait for load
-    if autoFarmEnabled and selectedMobType and currentMobFolder then
-        local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
-        if hrp then
-            local matches = {}
-            for _, mob in ipairs(currentMobFolder:GetChildren()) do
-                if mob:IsA("BasePart") and mob.Name:match("^" .. selectedMobType .. "(_%d+)?$") then
-                    table.insert(matches, mob)
-                end
-            end
-            
-            if #matches > 0 then
-                local target = matches[math.random(1, #matches)]
-                local offset = CFrame.new(math.random(-4,4), 6, math.random(-6,-2))
-                hrp.CFrame = target.CFrame * offset
-            end
-        end
-    end
-end)
