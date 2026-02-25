@@ -186,10 +186,11 @@ MiscTab:CreateButton({
 MiscTab:CreateButton({
     Name = "Teleport",
     Callback = function()
+        -- FIXED: Make sure selectedMachine is a string (not table/nil)
         if not selectedMachine or selectedMachine == "No machines found" or selectedMachine == "None" then
             Rayfield:Notify({
                 Title = "Error",
-                Content = "Select a machine first!",
+                Content = "Select a machine from the dropdown first!",
                 Duration = 4
             })
             return
@@ -199,13 +200,22 @@ MiscTab:CreateButton({
         if not machine then
             Rayfield:Notify({
                 Title = "Error",
-                Content = selectedMachine .. " not found",
+                Content = selectedMachine .. " not found (may have been removed)",
                 Duration = 4
             })
             return
         end
         
-        local playerFolder = workspace:WaitForChild("Players")
+        local playerFolder = workspace:WaitForChild("Players", 5)
+        if not playerFolder then
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "Players folder not found",
+                Duration = 4
+            })
+            return
+        end
+        
         local playerChar = playerFolder:FindFirstChild(player.Name)
         if not playerChar then
             Rayfield:Notify({
@@ -220,12 +230,13 @@ MiscTab:CreateButton({
         if not hrp then
             Rayfield:Notify({
                 Title = "Error",
-                Content = "No HumanoidRootPart found",
+                Content = "No HumanoidRootPart found in your character",
                 Duration = 4
             })
             return
         end
         
+        -- Get target CFrame (handles Parts + Models)
         local targetCFrame
         if machine.PrimaryPart then
             targetCFrame = machine.PrimaryPart.CFrame
@@ -236,6 +247,7 @@ MiscTab:CreateButton({
             targetCFrame = firstPart and firstPart.CFrame or CFrame.new(machine.Position or Vector3.new())
         end
         
+        -- Teleport 5 studs above
         hrp.CFrame = targetCFrame + Vector3.new(0, 5, 0)
         
         Rayfield:Notify({
@@ -244,10 +256,9 @@ MiscTab:CreateButton({
             Duration = 4
         })
         
-        print("Teleported to:", selectedMachine)
+        print("Teleported to:", selectedMachine, "at", targetCFrame.Position)
     end,
 })
-
 
 -- =====================================
 -- AUTO FARM - Detects current map from workspace.Maps + Mobs from MobSpawns
@@ -391,110 +402,4 @@ FarmTab:CreateSlider({
     end,
 })
 
--- Auto Farm Toggle - TP to random mob of selected type
-FarmTab:CreateToggle({
-    Name = "Auto Farm (TP Loop)",
-    CurrentValue = false,
-    Flag = "AutoFarmToggle",
-    
-    Callback = function(Value)
-        autoFarmEnabled = Value
-        
-        if Value then
-            if not selectedMobType or not currentMobFolder then
-                Rayfield:Notify({
-                    Title = "Error",
-                    Content = "Scan map & select mob first!",
-                    Duration = 5
-                })
-                autoFarmEnabled = false
-                return
-            end
-            
-            Rayfield:Notify({
-                Title = "Auto Farm ON",
-                Content = "Random TP to " .. selectedMobType .. " every ~" .. farmDelay .. "s",
-                Duration = 5
-            })
-            
-            task.spawn(function()
-                while autoFarmEnabled do
-                    -- Get HRP from workspace.Players
-                    local playersFolder = workspace:FindFirstChild("Players")
-                    if not playersFolder then
-                        task.wait(1)
-                        continue
-                    end
-                    
-                    local playerChar = playersFolder:FindFirstChild(player.Name)
-                    if not playerChar then
-                        task.wait(1)
-                        continue
-                    end
-                    
-                    local hrp = playerChar:FindFirstChild("HumanoidRootPart")
-                    if not hrp then
-                        task.wait(1)
-                        continue
-                    end
-                    
-                    -- Find matching spawns
-                    local matches = {}
-                    for _, mob in ipairs(currentMobFolder:GetChildren()) do
-                        if mob:IsA("BasePart") and mob.Name:match("^" .. selectedMobType .. "(_%d+)?$") then
-                            table.insert(matches, mob)
-                        end
-                    end
-                    
-                    if #matches == 0 then
-                        task.wait(farmDelay)
-                        continue
-                    end
-                    
-                    -- Random target
-                    local target = matches[math.random(1, #matches)]
-                    
-                    -- Teleport with offset
-                    local offset = CFrame.new(math.random(-4,4), 6, math.random(-6,-2))
-                    local success, err = pcall(function()
-                        hrp.CFrame = target.CFrame * offset
-                    end)
-                    
-                    if not success then
-                        warn("TP failed:", tostring(err))
-                    end
-                    
-                    task.wait(farmDelay)
-                end
-            end)
-        else
-            Rayfield:Notify({
-                Title = "Auto Farm OFF",
-                Duration = 3
-            })
-        end
-    end,
-})
-
--- Respawn handler (auto-TP after death)
-player.CharacterAdded:Connect(function(newChar)
-    task.wait(2)  -- Wait for full load
-    if autoFarmEnabled and selectedMobType and currentMobFolder then
-        local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
-        if hrp then
-            local matches = {}
-            for _, mob in ipairs(currentMobFolder:GetChildren()) do
-                if mob:IsA("BasePart") and mob.Name:match("^" .. selectedMobType .. "(_%d+)?$") then
-                    table.insert(matches, mob)
-                end
-            end
-            
-            if #matches > 0 then
-                local target = matches[math.random(1, #matches)]
-                local offset = CFrame.new(math.random(-4,4), 6, math.random(-6,-2))
-                hrp.CFrame = target.CFrame * offset
-            end
-        end
-    end
-end)
 
