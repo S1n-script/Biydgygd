@@ -765,3 +765,199 @@ MainTab:CreateToggle({
         end
     end,
 })
+
+-- Misc Tab Features: Anti-AFK, Speed, Inf Jump, Performance
+-- Add this AFTER: local MiscTab = Window:CreateTab("Misc", nil)
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local VirtualUser = game:GetService("VirtualUser")
+local Lighting = game:GetService("Lighting")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local rootPart = character:WaitForChild("HumanoidRootPart")
+
+-- Anti-AFK Variables
+local antiAFKEnabled = false
+local antiAFKConnection = nil
+
+-- Speed Variables
+local defaultWalkSpeed = 16
+local speedConnection = nil
+
+-- Inf Jump Variables
+local infJumpEnabled = false
+local infJumpConnection = nil
+
+-- Performance Variables
+local performanceEnabled = false
+local originalSettings = {}
+
+-- 1. ANTI-AFK TOGGLE (actually works - uses VirtualUser)
+MiscTab:CreateToggle({
+    Name = "Anti AFK (Working)",
+    CurrentValue = false,
+    Flag = "AntiAFK",
+    Callback = function(enabled)
+        antiAFKEnabled = enabled
+        
+        if enabled then
+            Rayfield:Notify({
+                Title = "Anti AFK",
+                Content = "Activated - simulates inputs every ~60s",
+                Duration = 4
+            })
+            
+            VirtualUser:CaptureController()
+            VirtualUser:SetKeyDown("0x00")  -- Dummy key
+            
+            antiAFKConnection = task.spawn(function()
+                while antiAFKEnabled do
+                    task.wait(math.random(55, 65))  -- 55-65s random
+                    
+                    -- Simulate right-click + move
+                    VirtualUser:ClickButton2(Vector2.new(0, 0))
+                    task.wait(0.1)
+                    VirtualUser:ClickButton2(Vector2.new(0, 0))
+                end
+                VirtualUser:ReleaseController()
+            end)
+        else
+            Rayfield:Notify({
+                Title = "Anti AFK",
+                Content = "Deactivated",
+                Duration = 3
+            })
+            if antiAFKConnection then
+                task.cancel(antiAFKConnection)
+                antiAFKConnection = nil
+            end
+            VirtualUser:ReleaseController()
+        end
+    end,
+})
+
+-- 2. SPEED SLIDER (16-500)
+MiscTab:CreateSlider({
+    Name = "Walk Speed",
+    Range = {16, 500},
+    Increment = 1,
+    Suffix = "Speed",
+    CurrentValue = 16,
+    Flag = "WalkSpeed",
+    Callback = function(value)
+        getgenv().WalkSpeedValue = value
+        
+        if speedConnection then
+            speedConnection:Disconnect()
+        end
+        
+        speedConnection = RunService.Heartbeat:Connect(function()
+            if player.Character and player.Character:FindFirstChild("Humanoid") then
+                player.Character.Humanoid.WalkSpeed = value
+            end
+        end)
+    end,
+})
+
+-- 3. INFINITE JUMPS TOGGLE
+MiscTab:CreateToggle({
+    Name = "Infinite Jumps",
+    CurrentValue = false,
+    Flag = "InfJump",
+    Callback = function(enabled)
+        infJumpEnabled = enabled
+        
+        if enabled then
+            Rayfield:Notify({
+                Title = "Infinite Jumps",
+                Content = "Hold space to fly/jump forever",
+                Duration = 4
+            })
+            
+            infJumpConnection = UserInputService.JumpRequest:Connect(function()
+                if player.Character and player.Character:FindFirstChild("Humanoid") then
+                    player.Character.Humanoid:ChangeState("Jumping")
+                end
+            end)
+        else
+            Rayfield:Notify({
+                Title = "Infinite Jumps",
+                Content = "Disabled",
+                Duration = 3
+            })
+            if infJumpConnection then
+                infJumpConnection:Disconnect()
+                infJumpConnection = nil
+            end
+        end
+    end,
+})
+
+-- 4. PERFORMANCE BUTTON (FPS Boost - toggles low graphics)
+MiscTab:CreateButton({
+    Name = "🖥️ FPS Boost / Performance Mode",
+    Callback = function()
+        performanceEnabled = not performanceEnabled
+        
+        if performanceEnabled then
+            -- Save originals
+            originalSettings = {
+                GlobalShadows = Lighting.GlobalShadows,
+                Brightness = Lighting.Brightness,
+                ClockTime = Lighting.ClockTime,
+                FogEnd = Lighting.FogEnd,
+                FogStart = Lighting.FogStart,
+            }
+            
+            -- Apply low graphics
+            Lighting.GlobalShadows = false
+            Lighting.Brightness = 2
+            Lighting.ClockTime = 14
+            Lighting.FogEnd = 100000
+            Lighting.FogStart = 0
+            Lighting.GeographicLatitude = 0
+            Lighting.OutdoorAmbient = Color3.fromRGB(127, 127, 127)
+            
+            -- Workspace optimizations
+            for _, v in workspace:GetDescendants() do
+                if v:IsA("Explosion") then v:Destroy() end
+                if v:IsA("Fire") or v:IsA("Sparkles") then v:Destroy() end
+                if v:IsA("Smoke") or v:IsA("Light") then v:Destroy() end
+            end
+            
+            -- Reduce particle emitters
+            for _, obj in workspace:GetDescendants() do
+                if obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
+                    obj.Lifetime = NumberRange.new(0)
+                    obj.Rate = 0
+                end
+            end
+            
+            Rayfield:Notify({
+                Title = "Performance Mode ON",
+                Content = "FPS boosted! Shadows off, effects cleared.",
+                Duration = 5
+            })
+        else
+            -- Restore originals
+            pcall(function()
+                Lighting.GlobalShadows = originalSettings.GlobalShadows
+                Lighting.Brightness = originalSettings.Brightness
+                Lighting.ClockTime = originalSettings.ClockTime
+                Lighting.FogEnd = originalSettings.FogEnd
+                Lighting.FogStart = originalSettings.FogStart
+            end)
+            
+            Rayfield:Notify({
+                Title = "Performance Mode OFF",
+                Content = "Graphics restored.",
+                Duration = 4
+            })
+        end
+    end,
+})
