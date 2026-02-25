@@ -373,7 +373,8 @@ FarmTab:CreateButton({
     end,
 })
 
--- Auto Farm Toggle - REAL FIXED VERSION (workspace.Players HRP + mob CFrame)
+
+-- Auto Farm Toggle - FIXED with correct HRP from player.Character + safety
 FarmTab:CreateToggle({
     Name = "Auto Farm Selected Mob",
     CurrentValue = false,
@@ -401,24 +402,13 @@ FarmTab:CreateToggle({
             
             task.spawn(function()
                 while autoFarmEnabled do
-                    -- Get character from workspace.Players
-                    local playersFolder = workspace:FindFirstChild("Players")
-                    if not playersFolder then
-                        print("[DEBUG] Players folder missing")
-                        task.wait(1)
-                        continue
-                    end
+                    -- Get player, character, HRP (fixed & safe)
+                    local player = game.Players.LocalPlayer
+                    local character = player and player.Character
+                    local hrp = character and character:FindFirstChild("HumanoidRootPart")
                     
-                    local playerChar = playersFolder:WaitForChild(player.Name, 3)
-                    if not playerChar then
-                        print("[DEBUG] Character not found in Players folder")
-                        task.wait(1)
-                        continue
-                    end
-                    
-                    local hrp = playerChar:WaitForChild("HumanoidRootPart", 3)
                     if not hrp then
-                        print("[DEBUG] No HumanoidRootPart in character")
+                        print("[DEBUG] No HRP - waiting for character load")
                         task.wait(1)
                         continue
                     end
@@ -432,19 +422,18 @@ FarmTab:CreateToggle({
                     end
                     
                     if #matches == 0 then
-                        print("[DEBUG] No matching mobs found for " .. selectedMobType)
+                        print("[DEBUG] No matching mobs for " .. selectedMobType)
                         task.wait(farmDelay)
                         continue
                     end
                     
-                    -- Pick random target mob
-                    local targetMob = matches[math.random(1, #matches)]
-                    print("[DEBUG] Targeting mob:", targetMob.Name)
+                    -- Pick random target
+                    local target = matches[math.random(1, #matches)]
                     
                     -- Use mob's CFrame directly (BasePart)
-                    local mobCFrame = targetMob.CFrame
+                    local mobCFrame = target.CFrame
                     
-                    -- Random offset (land above & around)
+                    -- Random offset (land nicely)
                     local offset = CFrame.new(math.random(-4,4), 6, math.random(-6,-2))
                     local finalCFrame = mobCFrame * offset
                     
@@ -454,9 +443,9 @@ FarmTab:CreateToggle({
                     end)
                     
                     if success then
-                        print("[SUCCESS] TP to", targetMob.Name, "at", finalCFrame.Position)
+                        print("[SUCCESS] TP to " .. target.Name .. " at " .. tostring(finalCFrame.Position))
                     else
-                        warn("[ERROR] TP failed:", tostring(err))
+                        warn("[TP ERROR]: " .. tostring(err))
                     end
                     
                     task.wait(farmDelay)
@@ -470,6 +459,28 @@ FarmTab:CreateToggle({
         end
     end,
 })
+
+-- Respawn handler (optional but recommended)
+player.CharacterAdded:Connect(function(newChar)
+    task.wait(2)  -- Wait for full load
+    if autoFarmEnabled and selectedMobType and currentMobFolder then
+        local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
+        if hrp then
+            local matches = {}
+            for _, mob in ipairs(currentMobFolder:GetChildren()) do
+                if mob:IsA("BasePart") and mob.Name:match("^" .. selectedMobType .. "(_%d+)?$") then
+                    table.insert(matches, mob)
+                end
+            end
+            
+            if #matches > 0 then
+                local target = matches[math.random(1, #matches)]
+                local offset = CFrame.new(math.random(-4,4), 6, math.random(-6,-2))
+                hrp.CFrame = target.CFrame * offset
+            end
+        end
+    end
+end)
 
 -- Delay slider
 FarmTab:CreateSlider({
