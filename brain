@@ -373,7 +373,7 @@ FarmTab:CreateButton({
     end,
 })
 
--- Auto Farm Toggle - FIXED TP using workspace.Players HRP + mob CFrame
+-- Auto Farm Toggle - REAL FIXED VERSION (workspace.Players HRP + mob CFrame)
 FarmTab:CreateToggle({
     Name = "Auto Farm Selected Mob",
     CurrentValue = false,
@@ -401,26 +401,29 @@ FarmTab:CreateToggle({
             
             task.spawn(function()
                 while autoFarmEnabled do
-                    -- Get your HRP from workspace.Players
+                    -- Get character from workspace.Players
                     local playersFolder = workspace:FindFirstChild("Players")
                     if not playersFolder then
+                        print("[DEBUG] Players folder missing")
                         task.wait(1)
                         continue
                     end
                     
-                    local playerChar = playersFolder:FindFirstChild(player.Name)
+                    local playerChar = playersFolder:WaitForChild(player.Name, 3)
                     if not playerChar then
+                        print("[DEBUG] Character not found in Players folder")
                         task.wait(1)
                         continue
                     end
                     
-                    local hrp = playerChar:FindFirstChild("HumanoidRootPart")
+                    local hrp = playerChar:WaitForChild("HumanoidRootPart", 3)
                     if not hrp then
+                        print("[DEBUG] No HumanoidRootPart in character")
                         task.wait(1)
                         continue
                     end
                     
-                    -- Find matching mob spawns (from currentMobFolder)
+                    -- Find matching mob spawns
                     local matches = {}
                     for _, mob in ipairs(currentMobFolder:GetChildren()) do
                         if mob:IsA("BasePart") and mob.Name:match("^" .. selectedMobType .. "(_%d+)?$") then
@@ -429,29 +432,31 @@ FarmTab:CreateToggle({
                     end
                     
                     if #matches == 0 then
+                        print("[DEBUG] No matching mobs found for " .. selectedMobType)
                         task.wait(farmDelay)
                         continue
                     end
                     
-                    -- Pick random mob
+                    -- Pick random target mob
                     local targetMob = matches[math.random(1, #matches)]
+                    print("[DEBUG] Targeting mob:", targetMob.Name)
                     
-                    -- Use mob's CFrame directly (they're BaseParts)
+                    -- Use mob's CFrame directly (BasePart)
                     local mobCFrame = targetMob.CFrame
                     
-                    -- Apply random offset for natural position
+                    -- Random offset (land above & around)
                     local offset = CFrame.new(math.random(-4,4), 6, math.random(-6,-2))
                     local finalCFrame = mobCFrame * offset
                     
-                    -- Teleport your HRP
+                    -- Teleport HRP
                     local success, err = pcall(function()
                         hrp.CFrame = finalCFrame
                     end)
                     
-                    if not success then
-                        warn("TP failed:", tostring(err))
+                    if success then
+                        print("[SUCCESS] TP to", targetMob.Name, "at", finalCFrame.Position)
                     else
-                        print("TP to:", targetMob.Name, "at", finalCFrame.Position)
+                        warn("[ERROR] TP failed:", tostring(err))
                     end
                     
                     task.wait(farmDelay)
@@ -466,37 +471,6 @@ FarmTab:CreateToggle({
     end,
 })
 
--- Respawn handler - auto-TP after death
-player.CharacterAdded:Connect(function(newChar)
-    task.wait(2)  -- Wait for full load
-    if autoFarmEnabled and selectedMobType and currentMobFolder then
-        local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
-        if hrp then
-            local matches = {}
-            for _, mob in ipairs(currentMobFolder:GetChildren()) do
-                if mob:IsA("BasePart") and mob.Name:match("^" .. selectedMobType .. "(_%d+)?$") then
-                    table.insert(matches, mob)
-                end
-            end
-            
-            if #matches > 0 then
-                local targetMob = matches[math.random(1, #matches)]
-                local mobCFrame = targetMob.CFrame
-                local offset = CFrame.new(math.random(-4,4), 6, math.random(-6,-2))
-                local finalCFrame = mobCFrame * offset
-                
-                local success, err = pcall(function()
-                    hrp.CFrame = finalCFrame
-                end)
-                
-                if not success then
-                    warn("Respawn TP failed:", tostring(err))
-                end
-            end
-        end
-    end
-end)
-
 -- Delay slider
 FarmTab:CreateSlider({
     Name = "Teleport Delay",
@@ -509,5 +483,3 @@ FarmTab:CreateSlider({
         farmDelay = Value
     end,
 })
-
-
