@@ -147,510 +147,67 @@ local function getMachineNames()
     return names
 end
 
--- Dropdown - Teleports instantly on selection
-local MachinesDropdown = MiscTab:CreateDropdown({
-    Name = "Select Machine (Auto-TP)",
-    Options = getMachineNames(),
-    CurrentOption = {"None"},
-    MultipleOptions = false,
-    Flag = "MachineTPDropdown",
-    
-    Callback = function(Option)
-        local selectedMachine = Option and Option[1]  -- Extract string
-        
-        if not selectedMachine or selectedMachine == "No machines found" or selectedMachine == "None" then
-            return  -- Do nothing if invalid
-        end
-        
-        -- Notify selection
-        Rayfield:Notify({
-            Title = "Teleporting...",
-            Content = "Moving to: " .. selectedMachine,
-            Duration = 3
-        })
-        print("Auto-TP to machine:", selectedMachine)
-        
-        -- Find the machine
-        local machine = machinesFolder:FindFirstChild(selectedMachine)
-        if not machine then
-            Rayfield:Notify({
-                Title = "Error",
-                Content = selectedMachine .. " not found",
-                Duration = 4
-            })
-            return
-        end
-        
-        -- Get HRP from workspace.Players
-        local playerFolder = workspace:FindFirstChild("Players")
-        if not playerFolder then
-            Rayfield:Notify({Title = "Error", Content = "Players folder not found", Duration = 4})
-            return
-        end
-        
-        local playerChar = playerFolder:FindFirstChild(player.Name)
-        if not playerChar then
-            Rayfield:Notify({Title = "Error", Content = "Your character not found", Duration = 4})
-            return
-        end
-        
-        local hrp = playerChar:FindFirstChild("HumanoidRootPart")
-        if not hrp then
-            Rayfield:Notify({Title = "Error", Content = "No HumanoidRootPart found", Duration = 4})
-            return
-        end
-        
-        -- Get target CFrame (handles Parts/Models)
-        local targetCFrame
-        if machine.PrimaryPart then
-            targetCFrame = machine.PrimaryPart.CFrame
-        elseif machine:IsA("BasePart") then
-            targetCFrame = machine.CFrame
-        else
-            local firstPart = machine:FindFirstChildWhichIsA("BasePart", true)
-            targetCFrame = firstPart and firstPart.CFrame or CFrame.new(machine.Position or Vector3.new())
-        end
-        
-        -- Teleport 5 studs above
-        local success, err = pcall(function()
-            hrp.CFrame = targetCFrame + Vector3.new(0, 5, 0)
-        end)
-        
-        if success then
-            print("Auto-teleported to:", selectedMachine)
-        else
-            warn("TP failed:", tostring(err))
-            Rayfield:Notify({
-                Title = "Teleport Failed",
-                Content = "Check console for error",
-                Duration = 4
-            })
-        end
-    end,
-})
-
--- Optional: Refresh button (still useful)
-MiscTab:CreateButton({
-    Name = "Refresh Machines List",
-    Callback = function()
-        local newOptions = getMachineNames()
-        MachinesDropdown:Refresh(newOptions, true)
-        MachinesDropdown:Set({"None"})
-        Rayfield:Notify({
-            Title = "Refreshed",
-            Content = #newOptions .. " machines found",
-            Duration = 3
-        })
-    end,
-})
-
-
--- =====================================
--- AUTO FARM - Detects current map from workspace.Maps + Mobs from MobSpawns
--- Dropdown shows only mobs on your current island
--- =====================================
-
-local FarmTab = Window:CreateTab("Auto Farm", 4483362458)
+-- Assuming this is inside your Rayfield UI script (LocalScript)
 
 local player = game.Players.LocalPlayer
-local mapsFolder = workspace:WaitForChild("Maps")
-local mobSpawnsFolder = workspace:WaitForChild("MobSpawns")
+local ReplicatedStorage = game:GetService("ReplicatedStorage") -- if needed later
+local workspace = game.Workspace
 
-local autoFarmEnabled = false
-local farmDelay = 5
-local selectedMobType = nil
-local currentMapFolder = nil
-local currentMobFolder = nil
+-- Shared variables
+local selectedMobNames = {}           -- what user selected in dropdown
+local currentTarget = nil             -- current closest valid target
 
--- Detect current map by finding which map folder has corresponding mobs nearby
-local function detectCurrentMap()
-    local character = player.Character
-    if not character then return nil end
+-- UI references (adjust Tab/FarmTab to your actual tab name)
+-- If you have separate tabs, you can keep two dropdowns — but here we merge into one
+local MainTab = Tab          -- ← change to your farming tab name
+-- local FarmTab = Tab       -- if still using separate tab
+
+-- ────────────────────────────────────────────────
+--  Core Functions
+-- ────────────────────────────────────────────────
+
+local function getMobSpawnFolder()
+    local mobSpawns = workspace:FindFirstChild("MobSpawns")
+    if not mobSpawns then return nil end
     
-    local root = character:FindFirstChild("HumanoidRootPart")
-    if not root then return nil end
-    s
-local playerPos = root.Position
-    local closestMapName = nil
-    local minAvgDist = math.huge
+    -- Try common subfolder patterns
+    local candidates = {
+        mobSpawns:FindFirstChild("Nomek"),
+        -- add more patterns if your game has them, e.g. mobSpawns.CurrentMap, etc.
+    }
     
-    for _, mapFolder in ipairs(mapsFolder:GetChildren()) do
-        if mapFolder:IsA("Folder") or mapFolder:IsA("Model") then
-            local mapName = mapFolder.Name
-            local mobFolder = mobSpawnsFolder:FindFirstChild(mapName)
-            
-            if mobFolder and #mobFolder:GetChildren() > 0 then
-                local totalDist = 0
-                local count = 0
-                
-                for _, mob in ipairs(mobFolder:GetChildren()) do
-                    if mob:IsA("BasePart") then
-                        totalDist += (playerPos - mob.Position).Magnitude
-                        count += 1
-                    end
-                end
-                
-                if count > 0 then
-                    local avgDist = totalDist / count
-                    if avgDist < minAvgDist then
-                        minAvgDist = avgDist
-                        closestMapName = mapName
-                        currentMapFolder = mapFolder
-                        currentMobFolder = mobFolder
-                    end
-                end
-            end
+    for _, folder in candidates do
+        if folder and #folder:GetChildren() > 0 then
+            return folder
         end
     end
     
-    return closestMapName
-end
-
--- Get unique mob base names from current map's mob folder
-local function getMobTypes()
-    if not currentMobFolder then return {"Scan map first"} end
-    
-    local types = {}
-    local seen = {}
-    
-    for _, child in ipairs(currentMobFolder:GetChildren()) do
-        if child:IsA("BasePart") then
-            local baseName = child.Name:gsub("_%d+$", ""):gsub("Clone", ""):match("^%s*(.-)%s*$")
-            if baseName and baseName ~= "" and not seen[baseName] then
-                seen[baseName] = true
-                table.insert(types, baseName)
-            end
+    -- Fallback: return first folder with parts
+    for _, child in mobSpawns:GetChildren() do
+        if child:IsA("Folder") and #child:GetChildren() > 0 then
+            return child
         end
     end
     
-    table.sort(types)
-    return #types > 0 and types or {"No mobs on this map"}
+    return nil
 end
 
--- Dropdown for mobs (will be refreshed on scan)
-local MobDropdown = FarmTab:CreateDropdown({
-    Name = "Mobs on Current Map",
-    Options = {"Scan map first"},
-    CurrentOption = {"Scan map first"},
-    MultipleOptions = true,
-    Flag = "CurrentMapMobs",
-    
-    Callback = function(Option)
-        selectedMobType = Option[1]
-        if selectedMobType and selectedMobType ~= "Scan map first" and selectedMobType ~= "No mobs on this map" then
-            print("Selected to farm:", selectedMobType, "on", currentMapFolder and currentMapFolder.Name or "unknown")
-        end
-    end,
-})
-
--- Scan & refresh button
-FarmTab:CreateButton({
-    Name = "🔍 Scan Current Map & Load Mobs",
-    Callback = function()
-        currentMapFolder = nil
-        currentMobFolder = nil
-        local mapName = detectCurrentMap()
-        
-        if mapName then
-            local mobCount = currentMobFolder and #currentMobFolder:GetChildren() or 0
-            local typesCount = #getMobTypes()
-            
-            Rayfield:Notify({
-                Title = "Map Detected",
-                Content = mapName .. " (" .. mobCount .. " mobs, " .. typesCount .. " types)",
-                Duration = 5
-            })
-            
-            MobDropdown:Refresh(getMobTypes(), true)
-        else
-            Rayfield:Notify({
-                Title = "No Map Detected",
-                Content = "Move closer to mobs on a map",
-                Duration = 6
-            })
-            MobDropdown:Refresh({"Scan map first"}, true)
-        end
-    end,
-})    
-
-
--- Auto Farm Toggle - ULTIMATE FIXED VERSION for workspace.Players HRP
-FarmTab:CreateToggle({
-    Name = "Auto Farm Selected Mob",
-    CurrentValue = false,
-    Flag = "AutoFarmToggle",
-    
-    Callback = function(Value)
-        autoFarmEnabled = Value
-        
-        if Value then
-            if not selectedMobType or not currentMobFolder then
-                Rayfield:Notify({
-                    Title = "Error",
-                    Content = "Scan map & select mob first!",
-                    Duration = 5
-                })
-                autoFarmEnabled = false
-                return
-            end
-            
-            Rayfield:Notify({
-                Title = "Auto Farm ON",
-                Content = "Looping random " .. selectedMobType .. " every ~" .. farmDelay .. "s",
-                Duration = 5
-            })
-            
-            task.spawn(function()
-                while autoFarmEnabled do
-                    -- Get HRP from workspace.Players (your game uses this path)
-                    local playersFolder = workspace:FindFirstChild("Players")
-                    if not playersFolder then
-                        print("[DEBUG] Players folder not found - waiting")
-                        task.wait(1)
-                        continue
-                    end
-                    
-                    local playerChar = playersFolder:WaitForChild(player.Name, 5)
-                    if not playerChar then
-                        print("[DEBUG] Character not found in Players folder - waiting")
-                        task.wait(1)
-                        continue
-                    end
-                    
-                    local hrp = playerChar:WaitForChild("HumanoidRootPart", 5)
-                    if not hrp then
-                        print("[DEBUG] No HumanoidRootPart found - waiting for character load")
-                        task.wait(1)
-                        continue
-                    end
-                    
-                    print("[DEBUG] HRP found - proceeding with TP")
-                    
-                    -- Find matching mob spawns
-                    local matches = {}
-                    for _, mob in ipairs(currentMobFolder:GetChildren()) do
-                        if mob:IsA("BasePart") and mob.Name:match("^" .. selectedMobType .. "(_%d+)?$") then
-                            table.insert(matches, mob)
-                        end
-                    end
-                    
-                    if #matches == 0 then
-                        print("[DEBUG] No matching mobs for " .. selectedMobType .. " - waiting")
-                        task.wait(farmDelay)
-                        continue
-                    end
-                    
-                    -- Pick random mob
-                    local targetMob = matches[math.random(1, #matches)]
-                    print("[DEBUG] Targeting:", targetMob.Name)
-                    
-                    -- Use mob CFrame directly (BasePart)
-                    local mobCFrame = targetMob.CFrame
-                    
-                    -- Random offset
-                    local offset = CFrame.new(math.random(-4,4), 6, math.random(-6,-2))
-                    local finalCFrame = mobCFrame * offset
-                    
-                    -- Teleport HRP
-                    local success, err = pcall(function()
-                        hrp.CFrame = finalCFrame
-                    end)
-                    
-                    if success then
-                        print("[SUCCESS] TP to " .. targetMob.Name .. " at " .. tostring(finalCFrame.Position))
-                    else
-                        warn("[TP ERROR]: " .. tostring(err))
-                    end
-                    
-                    task.wait(farmDelay)
-                end
-            end)
-        else
-            Rayfield:Notify({
-                Title = "Auto Farm OFF",
-                Duration = 3
-            })
-        end
-    end,
-})
-
--- Respawn handler - auto-TP after death
-player.CharacterAdded:Connect(function(newChar)
-    task.wait(2)  -- Wait for character to fully load
-    if autoFarmEnabled and selectedMobType and currentMobFolder then
-        local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
-        if hrp then
-            local matches = {}
-            for _, mob in ipairs(currentMobFolder:GetChildren()) do
-                if mob:IsA("BasePart") and mob.Name:match("^" .. selectedMobType .. "(_%d+)?$") then
-                    table.insert(matches, mob)
-                end
-            end
-            
-            if #matches > 0 then
-                local targetMob = matches[math.random(1, #matches)]
-                local mobCFrame = targetMob.CFrame
-                local offset = CFrame.new(math.random(-4,4), 6, math.random(-6,-2))
-                local finalCFrame = mobCFrame * offset
-                
-                local success, err = pcall(function()
-                    hrp.CFrame = finalCFrame
-                end)
-                
-                if success then
-                    print("[RESPAWN SUCCESS] TP to " .. targetMob.Name)
-                else
-                    warn("[RESPAWN TP ERROR]: " .. tostring(err))
-                end
-            end
-        else
-            warn("[RESPAWN] No HRP found on new character")
-        end
-    end
-end)
-
--- Delay slider
-FarmTab:CreateSlider({
-    Name = "Teleport Delay",
-    Range = {1, 12},
-    Increment = 0.5,
-    Suffix = "seconds",
-    CurrentValue = 5,
-    Flag = "FarmDelay",
-    Callback = function(Value)
-        farmDelay = Value
-    end,
-})
-
--- LocalScript (put in StarterGui / StarterPlayerScripts / inside a ScreenGui, etc.)
-
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players = game:GetService("Players")
-
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
-
--- ───────────────────────────────────────────────────────────────
---  Configuration - change these to match your UI
--- ───────────────────────────────────────────────────────────────
-
-local SCREEN_GUI_NAME     = "GameModeSelector"     -- name of your ScreenGui
-local DROPDOWN_FRAME_NAME = "DropDownFrame"
-local BUTTON_NAME         = "SelectedModeButton"
-local SCROLL_FRAME_NAME   = "ScrollingFrame"
-local TEMPLATE_NAME       = "ModeTemplate"          -- the TextButton/Frame template inside ScrollingFrame
-
--- ───────────────────────────────────────────────────────────────
-
-local gui = playerGui:WaitForChild(SCREEN_GUI_NAME, 10)
-if not gui then
-	warn("ScreenGui '" .. SCREEN_GUI_NAME .. "' not found!")
-	return
-end
-
-local dropdown = gui:WaitForChild(DROPDOWN_FRAME_NAME)
-local mainButton = dropdown:WaitForChild(BUTTON_NAME)
-local scrollingFrame = dropdown:WaitForChild(SCROLL_FRAME_NAME)
-local template = scrollingFrame:WaitForChild(TEMPLATE_NAME)
-
--- Hide template
-template.Visible = false
-
-local gamemodesFolder = ReplicatedStorage:WaitForChild("Gamemodes")
-
--- Clear old buttons (useful when developing / hot-reloading)
-for _, child in scrollingFrame:GetChildren() do
-	if child:IsA("GuiButton") and child ~= template then
-		child:Destroy()
-	end
-end
-
--- Populate dropdown
-local function refreshGamemodes()
-	local modes = gamemodesFolder:GetChildren()
-	
-	-- Optional: sort alphabetically
-	table.sort(modes, function(a,b)
-		return a.Name < b.Name
-	end)
-	
-	for _, mode in modes do
-		local btn = template:Clone()
-		btn.Name = mode.Name
-		btn.Visible = true
-		
-		-- Most common cases:
-		if btn:FindFirstChildWhichIsA("TextLabel") then
-			btn:FindFirstChildWhichIsA("TextLabel").Text = mode.Name
-		else
-			btn.Text = mode.Name   -- if the button itself has the text
-		end
-		
-		-- When user clicks a mode
-		btn.MouseButton1Click:Connect(function()
-			mainButton.Text = mode.Name
-			-- Optional: fire remote event, set _G variable, etc.
-			-- Example:
-			-- game:GetService("ReplicatedStorage").SetGameMode:FireServer(mode.Name)
-			
-			-- Close dropdown (most common behavior)
-			scrollingFrame.Visible = false
-		end)
-		
-		btn.Parent = scrollingFrame
-	end
-	
-	-- Auto-size canvas (good practice)
-	scrollingFrame.CanvasSize = UDim2.fromOffset(0, #modes * (template.AbsoluteSize.Y + 4))
-end
-
--- Initial population
-refreshGamemodes()
-
--- Optional: listen for new gamemodes added/removed during gameplay
-gamemodesFolder.ChildAdded:Connect(refreshGamemodes)
-gamemodesFolder.ChildRemoved:Connect(refreshGamemodes)
-
--- Toggle dropdown when clicking the main button
-mainButton.MouseButton1Click:Connect(function()
-	scrollingFrame.Visible = not scrollingFrame.Visible
-end)
-
--- Optional: close dropdown when clicking outside
-local function isDescendantOfDropdown(guiObj)
-	return guiObj and (guiObj == dropdown or guiObj:IsDescendantOf(dropdown))
-end
-
-gui.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		local mousePos = input.Position
-		local target = playerGui:GetGuiObjectsAtPosition(mousePos.X, mousePos.Y)[1]
-		
-		if target and not isDescendantOfDropdown(target) then
-			scrollingFrame.Visible = false
-		end
-	end
-end)
-
-local selectedEnemyNames = {}
-local currentTarget = nil
-
--- Get unique enemy type names from the "Name" attribute
-local function getAllEnemyNames()
+-- Get all unique enemy/mob types from the active spawn folder
+local function getAllMobTypes()
     local options = {"None"}
-    local folder = workspace:FindFirstChild("MobSpawns") and workspace.MobSpawns:FindFirstChild("Nomek")
+    local folder = getMobSpawnFolder()
     if not folder then return options end
 
     local seen = {}
-    for _, obj in ipairs(folder:GetChildren()) do
-        if obj:IsA("BasePart") then
-            local enemyType = obj:GetAttribute("Name")
-            if enemyType and type(enemyType) == "string" and #enemyType > 0 then
-                if not seen[enemyType] then
-                    seen[enemyType] = true
-                    table.insert(options, enemyType)
-                end
+    for _, obj in folder:GetChildren() do
+        if obj:IsA("BasePart") or obj:IsA("Model") then
+            -- Prefer Attribute "Name" → fallback to object.Name cleaned
+            local mobType = obj:GetAttribute("Name") 
+                or obj.Name:gsub("_%d+$", ""):gsub("Clone", ""):match("^%s*(.-)%s*$")
+            
+            if mobType and #mobType > 0 and not seen[mobType] then
+                seen[mobType] = true
+                table.insert(options, mobType)
             end
         end
     end
@@ -659,184 +216,178 @@ local function getAllEnemyNames()
     return options
 end
 
--- Alive check: requires UUID to exist, and Health > 0 if present
-local function isEnemyAlive(part)
-    if not part or not part.Parent then
-        print("Enemy dead: part removed")
-        return false
-    end
+-- Improved alive check (works for many systems)
+local function isMobAlive(partOrModel)
+    local part = partOrModel:IsA("Model") and partOrModel:FindFirstChildWhichIsA("BasePart", true) or partOrModel
+    if not part or not part.Parent then return false end
 
-    -- UUID must exist (if missing, mob is dead/despawned)
-    if not part:GetAttribute("UUID") then
-        print("Enemy dead: UUID missing")
-        return false
-    end
+    -- Common death indicators
+    if part:GetAttribute("UUID") == nil then return false end
+    if part:GetAttribute("Dead") == true then return false end
+    
+    local health = part:GetAttribute("Health") or part.Parent:GetAttribute("Health")
+    if health and type(health) == "number" and health <= 0 then return false end
 
-    -- Check for a "Dead" attribute
-    if part:GetAttribute("Dead") == true then
-        print("Enemy dead: Dead attribute true")
-        return false
-    end
+    -- Optional: Humanoid check if mob uses one
+    local hum = part.Parent:FindFirstChildOfClass("Humanoid") 
+             or part:FindFirstChildOfClass("Humanoid")
+    if hum and hum.Health <= 0 then return false end
 
-    -- Check Health attribute
-    local health = part:GetAttribute("Health")
-    if health and type(health) == "number" then
-        if health <= 0 then
-            print("Enemy dead: Health <= 0")
-            return false
-        end
-    end
-
-    -- If it passed all checks, consider alive
     return true
 end
 
--- Dropdown
-local EnemyDropdown = Tab:CreateDropdown({
-    Name = "Select Enemy",
-    Options = getAllEnemyNames(),
-    CurrentOption = {"None"},
-    MultipleOptions = true,
-    Flag = "EnemyTypeDropdown",
-    Callback = function(selectedTable)
-        selectedEnemyNames = selectedTable
-        if #selectedEnemyNames == 0 or (selectedEnemyNames[1] == "None" and #selectedEnemyNames == 1) then
-            currentTarget = nil
-        end
-    end,
-})
-
--- Refresh button
-Tab:CreateButton({
-    Name = "Refresh Enemy Names",
-    Callback = function()
-        local newOptions = getAllEnemyNames()
-        EnemyDropdown:Refresh(newOptions)
-        EnemyDropdown:Set({"None"})
-    end,
-})
-
--- Returns alive enemies from selected types, sorted by distance
-local function getAliveEnemies()
-    if #selectedEnemyNames == 0 or (selectedEnemyNames[1] == "None" and #selectedEnemyNames == 1) then
+-- Get alive mobs of selected types, sorted by distance
+local function getAliveMobs()
+    if #selectedMobNames == 0 or (#selectedMobNames == 1 and selectedMobNames[1] == "None") then
         return {}
     end
 
-    local folder = workspace:FindFirstChild("MobSpawns") and workspace.MobSpawns:FindFirstChild("Nomek")
+    local folder = getMobSpawnFolder()
     if not folder then return {} end
 
-    local player = game.Players.LocalPlayer
-    local character = player and player.Character
-    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    local char = player.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then return {} end
 
-    local selectedSet = {}
-    for _, name in ipairs(selectedEnemyNames) do
-        if name ~= "None" then
-            selectedSet[name] = true
-        end
+    local allowed = {}
+    for _, name in selectedMobNames do
+        if name ~= "None" then allowed[name] = true end
     end
 
-    local allAlive = {}
-    for _, obj in ipairs(folder:GetChildren()) do
-        if obj:IsA("BasePart") then
-            local enemyType = obj:GetAttribute("Name")
-            if enemyType and selectedSet[enemyType] and isEnemyAlive(obj) then
-                local dist = (hrp.Position - obj.Position).Magnitude
-                table.insert(allAlive, {
-                    part = obj,
-                    dist = dist,
-                    enemyType = enemyType
-                })
+    local candidates = {}
+    for _, obj in folder:GetChildren() do
+        if obj:IsA("BasePart") or obj:IsA("Model") then
+            local mobType = obj:GetAttribute("Name") 
+                or obj.Name:gsub("_%d+$", ""):gsub("Clone", ""):match("^%s*(.-)%s*$")
+            
+            if mobType and allowed[mobType] and isMobAlive(obj) then
+                local rootPart = obj:IsA("Model") and obj:FindFirstChild("HumanoidRootPart") or obj
+                if rootPart then
+                    local dist = (hrp.Position - rootPart.Position).Magnitude
+                    table.insert(candidates, {
+                        obj     = obj,
+                        root    = rootPart,
+                        dist    = dist,
+                        mobType = mobType
+                    })
+                end
             end
         end
     end
 
-    table.sort(allAlive, function(a, b) return a.dist < b.dist end)
-    return allAlive
+    table.sort(candidates, function(a,b) return a.dist < b.dist end)
+    return candidates
 end
 
-local function teleportToEnemy(hrp, enemyData)
-    if not hrp or not enemyData or not enemyData.part then return false end
-    if not isEnemyAlive(enemyData.part) then return false end
+-- Teleport helper (adjust offset for your combat style)
+local function teleportNearMob(hrp, mobData)
+    if not hrp or not mobData or not mobData.root then return false end
+    if not isMobAlive(mobData.obj) then return false end
 
-    -- Adjust offset as needed (behind and above)
-    local targetCFrame = enemyData.part.CFrame * CFrame.new(0, 3, -5)
-    hrp.CFrame = targetCFrame
+    -- Behind + slightly above
+    local offset = CFrame.new(0, 3, -4.5)
+    hrp.CFrame = mobData.root.CFrame * offset
     return true
 end
 
--- Auto toggle
-local AutoEnemiesToggle = Tab:CreateToggle({
-    Name = "Auto Enemies",
+-- ────────────────────────────────────────────────
+--  UI Elements
+-- ────────────────────────────────────────────────
+
+local MobDropdown = MainTab:CreateDropdown({
+    Name = "Select Enemy / Mob Type",
+    Options = getAllMobTypes(),
+    CurrentOption = {"None"},
+    MultipleOptions = true,
+    Flag = "MobTypeSelector",
+    Callback = function(selected)
+        selectedMobNames = selected
+        if #selected == 0 or (#selected == 1 and selected[1] == "None") then
+            currentTarget = nil
+        end
+        print("Selected mobs:", table.concat(selected, ", "))
+    end,
+})
+
+MainTab:CreateButton({
+    Name = "🔄 Refresh / Scan Mobs",
+    Callback = function()
+        local newOptions = getAllMobTypes()
+        MobDropdown:Refresh(newOptions, true)
+        if #newOptions > 1 then
+            MobDropdown:Set({"None"})   -- reset selection after refresh
+            Rayfield:Notify({
+                Title = "Mob List Updated",
+                Content = "Found " .. (#newOptions - 1) .. " mob types",
+                Duration = 4.5
+            })
+        else
+            Rayfield:Notify({
+                Title = "No Mobs Found",
+                Content = "Check if you're near a spawn area",
+                Duration = 5
+            })
+        end
+    end,
+})
+
+-- Auto Farm / Teleport Toggle
+MainTab:CreateToggle({
+    Name = "Auto Farm / Teleport to Selected",
     CurrentValue = false,
-    Flag = "AutoTeleportAllType",
-    Callback = function(Value)
-        getgenv().AutoTeleportAllType = Value
+    Flag = "AutoFarmToggle",
+    Callback = function(enabled)
+        getgenv().AutoFarmEnabled = enabled
 
-        if Value then
+        if enabled then
             task.spawn(function()
-                while getgenv().AutoTeleportAllType do
-                    if #selectedEnemyNames == 0 or (selectedEnemyNames[1] == "None" and #selectedEnemyNames == 1) then
-                        task.wait(0.3)
+                while getgenv().AutoFarmEnabled do
+                    task.wait(0.15)
+
+                    local char = player.Character
+                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                    if not hrp then continue end
+
+                    local alive = getAliveMobs()
+                    if #alive == 0 then
+                        currentTarget = nil
+                        task.wait(0.6)
                         continue
                     end
 
-                    local player = game.Players.LocalPlayer
-                    local character = player.Character
-                    if not character then
-                        task.wait(0.3)
-                        continue
-                    end
-
-                    local hrp = character:FindFirstChild("HumanoidRootPart")
-                    if not hrp then
-                        task.wait(0.3)
-                        continue
-                    end
-
-                    local aliveEnemies = getAliveEnemies()
-
-                    -- Check if current target is still alive
-                    if currentTarget and currentTarget.part then
+                    -- Validate / update current target
+                    if currentTarget and currentTarget.obj then
                         local stillAlive = false
-                        for _, enemy in ipairs(aliveEnemies) do
-                            if enemy.part == currentTarget.part then
+                        for _, e in alive do
+                            if e.obj == currentTarget.obj then
+                                currentTarget = e
                                 stillAlive = true
-                                currentTarget = enemy  -- update distance
                                 break
                             end
                         end
                         if not stillAlive then
-                            print("Current target dead, clearing")
                             currentTarget = nil
                         end
                     end
 
-                    if not currentTarget and #aliveEnemies > 0 then
-                        currentTarget = aliveEnemies[1]
-                        print("New target:", currentTarget.enemyType, "at distance", currentTarget.dist)
-                    end
-
+                    -- Pick new target if needed
                     if not currentTarget then
-                        task.wait(0.5)
-                        continue
+                        currentTarget = alive[1]
+                        print("New target →", currentTarget.mobType, " (" .. math.floor(currentTarget.dist) .. " studs)")
                     end
 
-                    if not isEnemyAlive(currentTarget.part) then
-                        print("Target died, clearing")
+                    if not isMobAlive(currentTarget.obj) then
                         currentTarget = nil
-                        task.wait(0.1)
                         continue
                     end
 
-                    currentTarget.dist = (hrp.Position - currentTarget.part.Position).Magnitude
+                    currentTarget.dist = (hrp.Position - currentTarget.root.Position).Magnitude
 
-                    if currentTarget.dist < 6 then
-                        task.wait(0.3)
+                    if currentTarget.dist > 7 then
+                        teleportNearMob(hrp, currentTarget)
+                        task.wait(0.25)
                     else
-                        teleportToEnemy(hrp, currentTarget)
-                        task.wait(0.2)
+                        task.wait(0.4) -- already close → small delay
                     end
                 end
                 currentTarget = nil
