@@ -120,7 +120,7 @@ local AutoRankUpToggle = MainTab:CreateToggle({
 
 
 task.wait(1)
-local MiscTab = Window:CreateTab("Misc", 4483362458)
+local MiscTab = Window:CreateTab("Misc", nil)   
 
 local rerollTypes = {
     "Saiyan",
