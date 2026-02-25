@@ -17,7 +17,7 @@ end
 
 local Window = Rayfield:CreateWindow({ Name = "Your Hub", ... })
 task.wait(0.1)
-local MainTab = Window:CreateTab("Main", nil) 
+local MainTab = Window:CreateTab("Player", nil) 
 
 -- Variables
 local autoClick = false
@@ -120,7 +120,7 @@ local AutoRankUpToggle = MainTab:CreateToggle({
 
 
 task.wait(1)
-local MiscTab = Window:CreateTab("Misc", nil)   
+local MiscTab = Window:CreateTab("Game", nil)   
 
 local rerollTypes = {
     "Saiyan",
@@ -766,6 +766,9 @@ MainTab:CreateToggle({
     end,
 })
 
+task.wait(0.6)
+local RealMiscTab = Window:CreateTab("Misc", nil)
+
 -- Misc Tab Features: Anti-AFK, Speed, Inf Jump, Performance
 -- Add this AFTER: local MiscTab = Window:CreateTab("Misc", nil)
 
@@ -798,7 +801,7 @@ local performanceEnabled = false
 local originalSettings = {}
 
 -- 1. ANTI-AFK TOGGLE (actually works - uses VirtualUser)
-MiscTab:CreateToggle({
+RealMiscTab:CreateToggle({
     Name = "Anti AFK (Working)",
     CurrentValue = false,
     Flag = "AntiAFK",
@@ -842,7 +845,7 @@ MiscTab:CreateToggle({
 })
 
 -- 2. SPEED SLIDER (16-500)
-MiscTab:CreateSlider({
+RealMiscTab:CreateSlider({
     Name = "Walk Speed",
     Range = {16, 500},
     Increment = 1,
@@ -865,7 +868,7 @@ MiscTab:CreateSlider({
 })
 
 -- 3. INFINITE JUMPS TOGGLE
-MiscTab:CreateToggle({
+RealMiscTab:CreateToggle({
     Name = "Infinite Jumps",
     CurrentValue = false,
     Flag = "InfJump",
@@ -899,7 +902,7 @@ MiscTab:CreateToggle({
 })
 
 -- 4. PERFORMANCE BUTTON (FPS Boost - toggles low graphics)
-MiscTab:CreateButton({
+RealMiscTab:CreateButton({
     Name = "🖥️ FPS Boost / Performance Mode",
     Callback = function()
         performanceEnabled = not performanceEnabled
@@ -961,3 +964,137 @@ MiscTab:CreateButton({
         end
     end,
 })
+
+-- Game Modes Dropdown with AUTO REFRESH - Add this after your tab is created
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- Helper function: scan Gamemodes folder for all mode names
+local function getGameModes()
+    local options = {"None"}
+    
+    local gamemodesFolder = ReplicatedStorage:FindFirstChild("Gamemodes")
+    if not gamemodesFolder then
+        warn("[GameModes] Folder not found in ReplicatedStorage")
+        return options
+    end
+    
+    local seen = {}
+    
+    -- Scan direct children
+    for _, child in ipairs(gamemodesFolder:GetChildren()) do
+        local name = child.Name
+        if name and name ~= "" and not seen[name] then
+            seen[name] = true
+            table.insert(options, name)
+        end
+    end
+    
+    -- Also scan descendants (subfolders, values, etc.)
+    for _, child in ipairs(gamemodesFolder:GetDescendants()) do
+        local name
+        
+        -- Prefer attribute if it exists (some games use Attributes)
+        if child:GetAttribute("Name") then
+            name = tostring(child:GetAttribute("Name"))
+        else
+            name = child.Name
+        end
+        
+        if name and name ~= "" and not seen[name] then
+            seen[name] = true
+            table.insert(options, name)
+        end
+    end
+    
+    table.sort(options)
+    return options
+end
+
+-- Dropdown
+local selectedGameMode = "None"
+
+local GameModeDropdown = RealMiscTab:CreateDropdown({   -- ← change to your tab: MiscTab, FarmTab, etc.
+    Name = "Select Game Mode",
+    Options = getGameModes(),
+    CurrentOption = {"None"},
+    MultipleOptions = false,
+    Flag = "GameModeSelector",
+    Callback = function(option)
+        selectedGameMode = option[1]
+        
+        if selectedGameMode == "None" then
+            Rayfield:Notify({
+                Title = "Game Mode",
+                Content = "Selection cleared",
+                Duration = 3
+            })
+        else
+            Rayfield:Notify({
+                Title = "Game Mode Selected",
+                Content = "Now set to: " .. selectedGameMode,
+                Duration = 4
+            })
+            print("[GameMode] Selected:", selectedGameMode)
+            
+            -- Optional: do something with the selection
+            -- e.g. fire remote, set variable, start mode-specific script
+        end
+    end,
+})
+
+-- Manual refresh button (still useful)
+RealMiscTab:CreateButton({
+    Name = "🔄 Refresh Game Modes",
+    Callback = function()
+        local newOptions = getGameModes()
+        GameModeDropdown:Refresh(newOptions, false)  -- false = keep current selection if possible
+        
+        Rayfield:Notify({
+            Title = "Game Modes Updated",
+            Content = "Found " .. (#newOptions - 1) .. " modes",
+            Duration = 4
+        })
+    end,
+})
+
+-- ────────────────────────────────────────────────
+-- AUTO REFRESH when folder contents change
+-- ────────────────────────────────────────────────
+
+local function autoRefreshGameModes()
+    if not GameModeDropdown then return end
+    
+    local newOptions = getGameModes()
+    -- false = try to keep current selection if it still exists
+    GameModeDropdown:Refresh(newOptions, false)
+    
+    -- Optional: only notify if count changed significantly
+    print("[AutoRefresh] Game modes updated - now " .. (#newOptions - 1) .. " options")
+end
+
+-- Connect to changes in the folder
+local gamemodesFolder = ReplicatedStorage:WaitForChild("Gamemodes", 10)
+
+if gamemodesFolder then
+    -- Child added / removed / renamed
+    gamemodesFolder.ChildAdded:Connect(autoRefreshGameModes)
+    gamemodesFolder.ChildRemoved:Connect(autoRefreshGameModes)
+    
+    -- Also listen for deeper changes (attributes, name changes in descendants)
+    gamemodesFolder.DescendantAdded:Connect(autoRefreshGameModes)
+    gamemodesFolder.DescendantRemoving:Connect(autoRefreshGameModes)
+    
+    -- Optional: watch for attribute changes (if modes use attributes)
+    gamemodesFolder.DescendantAdded:Connect(function(desc)
+        desc:GetPropertyChangedSignal("Name"):Connect(autoRefreshGameModes)
+        desc:GetAttributeChangedSignal("Name"):Connect(autoRefreshGameModes)
+    end)
+    
+    print("[GameModes] Auto-refresh enabled on folder changes")
+else
+    warn("[GameModes] Folder not found - auto-refresh disabled")
+end
+
+-- Initial scan
+task.delay(1, autoRefreshGameModes)
