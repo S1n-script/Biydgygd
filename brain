@@ -64,99 +64,6 @@ local ClickToggle = MainTab:CreateToggle({
 -- Misc Tab
 local MiscTab = Window:CreateTab("Misc", 4483362458)
 
-local autoBuyTitleEnabled = false
-
-local AutoTitleToggle = MiscTab:CreateToggle({
-    Name = "Auto Buy Best Title",
-    CurrentValue = false,
-    Flag = "AutoBuyTitle",
-    
-    Callback = function(Value)
-        autoBuyTitleEnabled = Value
-        
-        if Value then
-            Rayfield:Notify({
-                Title = "Auto Buy Titles",
-                Content = "Trying to buy best/available title every 30s...",
-                Duration = 4
-            })
-            
-            task.spawn(function()
-                local remotePath = game:GetService("ReplicatedStorage")
-                    :WaitForChild("Packages")
-                    :WaitForChild("_Index")
-                    :WaitForChild("sleitnick_knit@1.5.1")
-                    :WaitForChild("knit")
-                    :WaitForChild("Services")
-                
-                -- Try common title service names (most likely one of these)
-                local possibleServices = {"TitlesService", "TitleService", "PlayerTitlesService", "CustomizationService"}
-                local titlesRemote = nil
-                
-                for _, svcName in ipairs(possibleServices) do
-                    local svc = remotePath:FindFirstChild(svcName)
-                    if svc then
-                        local rf = svc:FindFirstChild("RF")
-                        if rf then
-                            -- Common remote names for buying titles
-                            local possibleRemotes = {"PurchaseTitle", "BuyTitle", "UnlockTitle", "EquipBestTitle", "ClaimBest", "BuyBest"}
-                            for _, remName in ipairs(possibleRemotes) do
-                                local rem = rf:FindFirstChild(remName)
-                                if rem and rem:IsA("RemoteFunction") then
-                                    titlesRemote = rem
-                                    print("Found title remote:", svcName .. ".RF." .. remName)
-                                    break
-                                end
-                            end
-                        end
-                        if titlesRemote then break end
-                    end
-                end
-                
-                if not titlesRemote then
-                    Rayfield:Notify({
-                        Title = "Auto Buy Failed",
-                        Content = "Could not find Titles remote. Check console for path.",
-                        Duration = 8
-                    })
-                    autoBuyTitleEnabled = false
-                    return
-                end
-                
-                -- Main loop
-                while autoBuyTitleEnabled do
-                    local success, result = pcall(function()
-                        -- Try with no args first (most common)
-                        return titlesRemote:InvokeServer()
-                    end)
-                    
-                    if success then
-                        print("Title buy attempt success:", tostring(result))
-                        -- If game returns something useful, you can check for "already max" here later
-                    else
-                        warn("Title buy error:", tostring(result))
-                        Rayfield:Notify({
-                            Title = "Auto Buy Error",
-                            Content = "Failed to buy title – stopping loop. Check console.",
-                            Duration = 6
-                        })
-                        autoBuyTitleEnabled = false
-                        break
-                    end
-                    
-                    task.wait(30)  -- Safe delay
-                end
-            end)
-        else
-            Rayfield:Notify({
-                Title = "Auto Buy Titles",
-                Content = "Stopped.",
-                Duration = 3
-            })
-        end
-    end,
-})
-
 -- Auto Rank Up Toggle (on MiscTab)
 local AutoRankUpToggle = MiscTab:CreateToggle({
     Name = "Auto Rank Up",
@@ -470,7 +377,131 @@ FarmTab:CreateButton({
     end,
 })
 
--- Auto Farm Toggle - FIXED with workspace.Players HRP + respawn support
+
+-- Delay slider
+FarmTab:CreateSlider({
+    Name = "Teleport Delay",
+    Range = {1, 12},
+    Increment = 0.5,
+    Suffix = "seconds",
+    CurrentValue = 5,
+    Flag = "FarmDelay",
+    Callback = function(Value)
+        farmDelay = Value
+    end,
+})
+
+-- =====================================
+-- FIXED AUTO FARM - Uses workspace.Players HRP + MobSpawns scan
+-- =====================================
+
+local player = game.Players.LocalPlayer
+local mobSpawnsFolder = workspace:WaitForChild("MobSpawns")
+
+local autoFarmEnabled = false
+local farmDelay = 5
+local selectedMobType = nil
+local currentMobFolder = nil  -- Current island's mob folder
+
+-- Detect current island folder (closest to player)
+local function detectCurrentMobFolder()
+    local character = player.Character
+    if not character then return nil end
+    
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
+    
+    local playerPos = root.Position
+    local closestFolder = nil
+    local minAvgDist = math.huge
+    
+    for _, folder in ipairs(mobSpawnsFolder:GetChildren()) do
+        if folder:IsA("Folder") and #folder:GetChildren() > 0 then
+            local totalDist = 0
+            local count = 0
+            
+            for _, mob in ipairs(folder:GetChildren()) do
+                if mob:IsA("BasePart") then
+                    totalDist = totalDist + (playerPos - mob.Position).Magnitude
+                    count = count + 1
+                end
+            end
+            
+            if count > 0 then
+                local avg = totalDist / count
+                if avg < minAvgDist then
+                    minAvgDist = avg
+                    closestFolder = folder
+                end
+            end
+        end
+    end
+    
+    return closestFolder
+end
+
+-- Get unique mob base names from folder
+local function getMobTypes(folder)
+    if not folder then return {"Scan island first"} end
+    
+    local types = {}
+    local seen = {}
+    
+    for _, child in ipairs(folder:GetChildren()) do
+        if child:IsA("BasePart") then
+            local baseName = child.Name:gsub("_%d+$", "")  -- Remove _1, _2, etc.
+            if baseName ~= "" and not seen[baseName] then
+                seen[baseName] = true
+                table.insert(types, baseName)
+            end
+        end
+    end
+    
+    table.sort(types)
+    return #types > 0 and types or {"No mobs on this island"}
+end
+
+-- Dropdown
+local MobDropdown = FarmTab:CreateDropdown({
+    Name = "Select Mob Type",
+    Options = {"Scan island first"},
+    CurrentOption = {"Scan island first"},
+    MultipleOptions = false,
+    Flag = "MobType",
+    
+    Callback = function(Option)
+        selectedMobType = Option[1]
+        if selectedMobType and selectedMobType ~= "Scan island first" then
+            print("Targeting:", selectedMobType)
+        end
+    end,
+})
+
+-- Scan & refresh button
+FarmTab:CreateButton({
+    Name = "Scan Island & Load Mobs",
+    Callback = function()
+        currentMobFolder = detectCurrentMobFolder()
+        if currentMobFolder then
+            local types = getMobTypes(currentMobFolder)
+            MobDropdown:Refresh(types, true)
+            Rayfield:Notify({
+                Title = "Island Loaded",
+                Content = currentMobFolder.Name .. " (" .. #types .. " mob types)",
+                Duration = 5
+            })
+        else
+            Rayfield:Notify({
+                Title = "No island detected",
+                Content = "Move near mobs and scan again",
+                Duration = 5
+            })
+            MobDropdown:Refresh({"Scan island first"}, true)
+        end
+    end,
+})
+
+-- Auto Farm Toggle - Uses workspace.Players HRP
 FarmTab:CreateToggle({
     Name = "Auto Farm Selected Mob",
     CurrentValue = false,
@@ -483,7 +514,7 @@ FarmTab:CreateToggle({
             if not selectedMobType or not currentMobFolder then
                 Rayfield:Notify({
                     Title = "Error",
-                    Content = "Scan map & select mob first!",
+                    Content = "Scan island & select mob first!",
                     Duration = 5
                 })
                 autoFarmEnabled = false
@@ -498,7 +529,7 @@ FarmTab:CreateToggle({
             
             task.spawn(function()
                 while autoFarmEnabled do
-                    -- Get character from workspace.Players (fixed path)
+                    -- Get HRP from workspace.Players
                     local playersFolder = workspace:FindFirstChild("Players")
                     if not playersFolder then
                         task.wait(1)
@@ -517,7 +548,7 @@ FarmTab:CreateToggle({
                         continue
                     end
                     
-                    -- Find matching mob spawns
+                    -- Find matching spawns
                     local matches = {}
                     for _, mob in ipairs(currentMobFolder:GetChildren()) do
                         if mob:IsA("BasePart") and mob.Name:match("^" .. selectedMobType .. "(_%d+)?$") then
@@ -533,7 +564,7 @@ FarmTab:CreateToggle({
                     -- Pick random target
                     local target = matches[math.random(1, #matches)]
                     
-                    -- Teleport with random offset
+                    -- Teleport with offset
                     local offset = CFrame.new(math.random(-4,4), 6, math.random(-6,-2))
                     local success, err = pcall(function()
                         hrp.CFrame = target.CFrame * offset
@@ -555,12 +586,25 @@ FarmTab:CreateToggle({
     end,
 })
 
--- Add this once (outside the toggle) for respawn handling
+-- Delay slider
+FarmTab:CreateSlider({
+    Name = "TP Delay",
+    Range = {3, 10},
+    Increment = 0.5,
+    Suffix = "s",
+    CurrentValue = 5,
+    Flag = "FarmDelay",
+    Callback = function(Value)
+        farmDelay = Value
+    end,
+})
+
+-- Respawn handler (auto-TP after death)
 player.CharacterAdded:Connect(function(newChar)
-    task.wait(2)  -- Wait for full load
-    if autoFarmEnabled then
-        -- Re-trigger a TP on respawn
-        if selectedMobType and currentMobFolder then
+    task.wait(2)  -- Wait for load
+    if autoFarmEnabled and selectedMobType and currentMobFolder then
+        local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
+        if hrp then
             local matches = {}
             for _, mob in ipairs(currentMobFolder:GetChildren()) do
                 if mob:IsA("BasePart") and mob.Name:match("^" .. selectedMobType .. "(_%d+)?$") then
@@ -570,26 +614,9 @@ player.CharacterAdded:Connect(function(newChar)
             
             if #matches > 0 then
                 local target = matches[math.random(1, #matches)]
-                local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
-                if hrp then
-                    local offset = CFrame.new(math.random(-4,4), 6, math.random(-6,-2))
-                    hrp.CFrame = target.CFrame * offset
-                end
+                local offset = CFrame.new(math.random(-4,4), 6, math.random(-6,-2))
+                hrp.CFrame = target.CFrame * offset
             end
         end
     end
 end)
-
--- Delay slider
-FarmTab:CreateSlider({
-    Name = "Teleport Delay",
-    Range = {1, 12},
-    Increment = 0.5,
-    Suffix = "seconds",
-    CurrentValue = 5,
-    Flag = "FarmDelay",
-    Callback = function(Value)
-        farmDelay = Value
-    end,
-})
-
