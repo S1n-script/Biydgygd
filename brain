@@ -561,98 +561,36 @@ local MobDropdown = FarmTab:CreateDropdown({
     end,
 })
 
--- ================================================
--- Auto-refresh + Manual Scan Button (integrated)
--- ================================================
+FarmTab:CreateButton({
+    Name = "🔍 Scan Current Map & Refresh Mobs",
+    Callback = function()
+        currentMapFolder = nil
+        currentMobFolder = nil
 
-local AUTO_REFRESH_INTERVAL = 8     -- seconds between auto-scans (adjust 5–15)
-local lastScanTime = 0
-local isScanning = false            -- prevent overlapping scans
+        local mapName = detectCurrentMap()
 
--- Helper: perform scan & update dropdown (used by both manual & auto)
-local function performMobScan(forceNotify)
-    if isScanning then return end
-    isScanning = true
-    
-    currentMapFolder = nil
-    currentMobFolder = nil
-    
-    local mapName = detectCurrentMap()
-    
-    if mapName then
-        local mobCount = currentMobFolder and #currentMobFolder:GetChildren() or 0
-        local types = getMobTypes()
-        local typesCount = #types > 0 and (#types == 1 and types[1] == "No mobs found on this map" and 0 or #types) or 0
-        
-        -- Only show notification on manual scan or significant change
-        if forceNotify then
+        if mapName then
+            local mobCount = currentMobFolder and #currentMobFolder:GetChildren() or 0
+            local types = getMobTypes()
+            local typesCount = #types > 0 and (#types == 1 and types[1] == "No mobs found on this map" and 0 or #types) or 0
+
             Rayfield:Notify({
                 Title = "Map Detected",
                 Content = mapName .. " (" .. mobCount .. " mobs, " .. typesCount .. " types)",
-                Duration = 4.5
+                Duration = 5
             })
-        end
-        
-        -- Refresh dropdown (false = keep current selection if still valid)
-        MobDropdown:Refresh(types, false)
-    else
-        if forceNotify then
+
+            MobDropdown:Refresh(types, true)
+        else
             Rayfield:Notify({
                 Title = "No Map / Mobs Detected",
                 Content = "Move closer to a mob spawn area",
                 Duration = 6
             })
+            MobDropdown:Refresh({"Scan map first"}, true)
         end
-        MobDropdown:Refresh({"Scan map first"}, true)
-    end
-    
-    lastScanTime = tick()
-    isScanning = false
-end
-
--- Manual Scan Button (user-triggered)
-FarmTab:CreateButton({
-    Name = "🔍 Scan Current Map & Refresh Mobs",
-    Callback = function()
-        performMobScan(true)   -- force notification
     end,
 })
-
--- ────────────────────────────────────────────────
--- AUTO REFRESH LOOP (runs in background)
--- ────────────────────────────────────────────────
-
-task.spawn(function()
-    while true do
-        task.wait(AUTO_REFRESH_INTERVAL)
-        
-        -- Only scan if player has character & is alive
-        if player.Character and player.Character:FindFirstChild("Humanoid") 
-           and player.Character.Humanoid.Health > 0 then
-            
-            -- Optional: only refresh if ~5+ seconds passed since last manual scan
-            if tick() - lastScanTime >= 5 then
-                performMobScan(false)   -- silent refresh (no notification spam)
-            end
-        end
-    end
-end)
-
--- Optional: also refresh when player respawns (very useful)
-player.CharacterAdded:Connect(function()
-    task.wait(2)   -- give time for map to load
-    performMobScan(false)
-end)
-
--- Optional: listen for workspace changes (if mobs spawn/despawn frequently)
--- (uncomment if needed - can be performance heavy in big games)
---[[
-workspace.ChildAdded:Connect(function(child)
-    if child:IsDescendantOf(workspace.MobSpawns) then
-        task.delay(1, function() performMobScan(false) end)
-    end
-end)
---]]
 
 FarmTab:CreateToggle({
     Name = "Auto Teleport to Closest Selected Mob",
@@ -970,6 +908,95 @@ MiscTab:CreateToggle({
     end,
 })
 
+-- Auto Raid Button (auto-farms raid mobs without dropdown selection)
+
+local autoRaidRunning = false
+local AUTO_RAID_DELAY = 0.25   -- same timing as your mob farm
+
+MiscTab:CreateButton({
+    Name = "Auto Raid (Toggle)",
+    Callback = function()
+        autoRaidRunning = not autoRaidRunning
+        
+        if autoRaidRunning then
+            Rayfield:Notify({
+                Title = "Auto Raid Activated",
+                Content = "Teleporting to closest raid mob...",
+                Duration = 4
+            })
+            
+            task.spawn(function()
+                while autoRaidRunning do
+                    task.wait(AUTO_RAID_DELAY)
+
+                    local char = player.Character
+                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                    if not hrp then continue end
+
+                    -- Use your existing functions (assumes they are defined)
+                    local aliveMobs = getAliveMobs()   -- your function that returns sorted alive mobs
+                    
+                    if #aliveMobs == 0 then
+                        currentTarget = nil
+                        task.wait(1)
+                        continue
+                    end
+
+                    -- Validate current target
+                    if currentTarget and currentTarget.obj then
+                        local stillAlive = false
+                        for _, mob in aliveMobs do
+                            if mob.obj == currentTarget.obj then
+                                currentTarget = mob
+                                stillAlive = true
+                                break
+                            end
+                        end
+                        if not stillAlive then
+                            currentTarget = nil
+                        end
+                    end
+
+                    -- Pick closest if needed
+                    if not currentTarget then
+                        currentTarget = aliveMobs[1]
+                        print("[AutoRaid] Targeting →", currentTarget.mobType or "Raid Mob", math.floor(currentTarget.dist), "studs")
+                    end
+
+                    if not isMobAlive(currentTarget.obj) then
+                        currentTarget = nil
+                        continue
+                    end
+
+                    currentTarget.dist = (hrp.Position - currentTarget.root.Position).Magnitude
+
+                    if currentTarget.dist > 7 then
+                        teleportToMob(hrp, currentTarget)   -- your teleport function
+                        task.wait(0.25)
+                    else
+                        task.wait(0.35)  -- already close
+                    end
+                end
+                
+                currentTarget = nil
+                Rayfield:Notify({
+                    Title = "Auto Raid Deactivated",
+                    Content = "Stopped farming raid mobs",
+                    Duration = 3.5
+                })
+            end)
+        else
+            -- Button pressed again → stop
+            Rayfield:Notify({
+                Title = "Auto Raid Deactivated",
+                Content = "Stopped farming raid mobs",
+                Duration = 3.5
+            })
+        end
+    end,
+})
+
+
 -- Auto Prestige Toggle (every 4 mins) - Add this after your MainTab is created
 
 local autoPrestigeEnabled = false
@@ -1044,3 +1071,4 @@ MainTab:CreateToggle({
         end
     end,
 })
+
