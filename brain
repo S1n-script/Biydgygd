@@ -908,41 +908,43 @@ MiscTab:CreateToggle({
     end,
 })
 
--- Auto Raid Button (auto-farms raid mobs without dropdown selection)
+-- Auto Raid Toggle (auto-farms raid mobs - no dropdown required)
 
-local autoRaidRunning = false
-local AUTO_RAID_DELAY = 0.25   -- same timing as your mob farm
+local autoRaidEnabled = false
 
-MiscTab:CreateButton({
-    Name = "Auto Raid (Toggle)",
-    Callback = function()
-        autoRaidRunning = not autoRaidRunning
+MiscTab:CreateToggle({
+    Name = "Auto Raid",
+    CurrentValue = false,
+    Flag = "AutoRaidFarmToggle",
+    Callback = function(enabled)
+        autoRaidEnabled = enabled
         
-        if autoRaidRunning then
+        if enabled then
             Rayfield:Notify({
                 Title = "Auto Raid Activated",
-                Content = "Teleporting to closest raid mob...",
-                Duration = 4
+                Content = "Teleporting to nearest raid mob...",
+                Duration = 4.5
             })
             
             task.spawn(function()
-                while autoRaidRunning do
-                    task.wait(AUTO_RAID_DELAY)
+                while autoRaidEnabled do
+                    task.wait(0.2)
 
                     local char = player.Character
                     local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                    if not hrp then continue end
+                    if not hrp then 
+                        task.wait(0.8)
+                        continue 
+                    end
 
-                    -- Use your existing functions (assumes they are defined)
-                    local aliveMobs = getAliveMobs()   -- your function that returns sorted alive mobs
-                    
+                    local aliveMobs = getAliveMobs()
                     if #aliveMobs == 0 then
                         currentTarget = nil
-                        task.wait(1)
+                        task.wait(1.2)
                         continue
                     end
 
-                    -- Validate current target
+                    -- Validate / refresh current target
                     if currentTarget and currentTarget.obj then
                         local stillAlive = false
                         for _, mob in aliveMobs do
@@ -957,7 +959,7 @@ MiscTab:CreateButton({
                         end
                     end
 
-                    -- Pick closest if needed
+                    -- Pick new target if needed
                     if not currentTarget then
                         currentTarget = aliveMobs[1]
                         print("[AutoRaid] Targeting →", currentTarget.mobType or "Raid Mob", math.floor(currentTarget.dist), "studs")
@@ -971,31 +973,32 @@ MiscTab:CreateButton({
                     currentTarget.dist = (hrp.Position - currentTarget.root.Position).Magnitude
 
                     if currentTarget.dist > 7 then
-                        teleportToMob(hrp, currentTarget)   -- your teleport function
+                        teleportToMob(hrp, currentTarget)
                         task.wait(0.25)
                     else
-                        task.wait(0.35)  -- already close
+                        task.wait(0.35)  -- already in range
                     end
                 end
                 
+                -- Cleanup when turned off
                 currentTarget = nil
                 Rayfield:Notify({
                     Title = "Auto Raid Deactivated",
-                    Content = "Stopped farming raid mobs",
-                    Duration = 3.5
+                    Content = "Stopped teleporting to raid mobs",
+                    Duration = 4
                 })
             end)
         else
-            -- Button pressed again → stop
+            -- Toggle turned off
+            currentTarget = nil
             Rayfield:Notify({
                 Title = "Auto Raid Deactivated",
-                Content = "Stopped farming raid mobs",
-                Duration = 3.5
+                Content = "Stopped teleporting to raid mobs",
+                Duration = 4
             })
         end
     end,
 })
-
 
 -- Auto Prestige Toggle (every 4 mins) - Add this after your MainTab is created
 
