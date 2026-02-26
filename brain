@@ -561,36 +561,98 @@ local MobDropdown = FarmTab:CreateDropdown({
     end,
 })
 
-FarmTab:CreateButton({
-    Name = "🔍 Scan Current Map & Refresh Mobs",
-    Callback = function()
-        currentMapFolder = nil
-        currentMobFolder = nil
+-- ================================================
+-- Auto-refresh + Manual Scan Button (integrated)
+-- ================================================
 
-        local mapName = detectCurrentMap()
+local AUTO_REFRESH_INTERVAL = 8     -- seconds between auto-scans (adjust 5–15)
+local lastScanTime = 0
+local isScanning = false            -- prevent overlapping scans
 
-        if mapName then
-            local mobCount = currentMobFolder and #currentMobFolder:GetChildren() or 0
-            local types = getMobTypes()
-            local typesCount = #types > 0 and (#types == 1 and types[1] == "No mobs found on this map" and 0 or #types) or 0
-
+-- Helper: perform scan & update dropdown (used by both manual & auto)
+local function performMobScan(forceNotify)
+    if isScanning then return end
+    isScanning = true
+    
+    currentMapFolder = nil
+    currentMobFolder = nil
+    
+    local mapName = detectCurrentMap()
+    
+    if mapName then
+        local mobCount = currentMobFolder and #currentMobFolder:GetChildren() or 0
+        local types = getMobTypes()
+        local typesCount = #types > 0 and (#types == 1 and types[1] == "No mobs found on this map" and 0 or #types) or 0
+        
+        -- Only show notification on manual scan or significant change
+        if forceNotify then
             Rayfield:Notify({
                 Title = "Map Detected",
                 Content = mapName .. " (" .. mobCount .. " mobs, " .. typesCount .. " types)",
-                Duration = 5
+                Duration = 4.5
             })
-
-            MobDropdown:Refresh(types, true)
-        else
+        end
+        
+        -- Refresh dropdown (false = keep current selection if still valid)
+        MobDropdown:Refresh(types, false)
+    else
+        if forceNotify then
             Rayfield:Notify({
                 Title = "No Map / Mobs Detected",
                 Content = "Move closer to a mob spawn area",
                 Duration = 6
             })
-            MobDropdown:Refresh({"Scan map first"}, true)
         end
+        MobDropdown:Refresh({"Scan map first"}, true)
+    end
+    
+    lastScanTime = tick()
+    isScanning = false
+end
+
+-- Manual Scan Button (user-triggered)
+FarmTab:CreateButton({
+    Name = "🔍 Scan Current Map & Refresh Mobs",
+    Callback = function()
+        performMobScan(true)   -- force notification
     end,
 })
+
+-- ────────────────────────────────────────────────
+-- AUTO REFRESH LOOP (runs in background)
+-- ────────────────────────────────────────────────
+
+task.spawn(function()
+    while true do
+        task.wait(AUTO_REFRESH_INTERVAL)
+        
+        -- Only scan if player has character & is alive
+        if player.Character and player.Character:FindFirstChild("Humanoid") 
+           and player.Character.Humanoid.Health > 0 then
+            
+            -- Optional: only refresh if ~5+ seconds passed since last manual scan
+            if tick() - lastScanTime >= 5 then
+                performMobScan(false)   -- silent refresh (no notification spam)
+            end
+        end
+    end
+end)
+
+-- Optional: also refresh when player respawns (very useful)
+player.CharacterAdded:Connect(function()
+    task.wait(2)   -- give time for map to load
+    performMobScan(false)
+end)
+
+-- Optional: listen for workspace changes (if mobs spawn/despawn frequently)
+-- (uncomment if needed - can be performance heavy in big games)
+--[[
+workspace.ChildAdded:Connect(function(child)
+    if child:IsDescendantOf(workspace.MobSpawns) then
+        task.delay(1, function() performMobScan(false) end)
+    end
+end)
+--]]
 
 FarmTab:CreateToggle({
     Name = "Auto Teleport to Closest Selected Mob",
@@ -772,79 +834,95 @@ local RealMiscTab = Window:CreateTab("Misc", nil)
 -- Misc Tab Features: Anti-AFK, Speed, Inf Jump, Performance
 -- Add this AFTER: local MiscTab = Window:CreateTab("Misc", nil)
 
-local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-local VirtualUser = game:GetService("VirtualUser")
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
 
+local VirtualUser = game:GetService("VirtualUser")
+local Players = game:GetService("Players")
+
 local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid")
-local rootPart = character:WaitForChild("HumanoidRootPart")
-
--- Anti-AFK Variables
 local antiAFKEnabled = false
-local antiAFKConnection = nil
+local antiAFKThread = nil
 
--- Speed Variables
-local defaultWalkSpeed = 16
-local speedConnection = nil
-
--- Inf Jump Variables
-local infJumpEnabled = false
-local infJumpConnection = nil
-
--- Performance Variables
-local performanceEnabled = false
-local originalSettings = {}
-
--- 1. ANTI-AFK TOGGLE (actually works - uses VirtualUser)
 RealMiscTab:CreateToggle({
-    Name = "Anti AFK (Working)",
+    Name = "Anti AFK",
     CurrentValue = false,
-    Flag = "AntiAFK",
+    Flag = "AntiAFK_Fixed",
     Callback = function(enabled)
         antiAFKEnabled = enabled
         
         if enabled then
             Rayfield:Notify({
-                Title = "Anti AFK",
-                Content = "Activated - simulates inputs every ~60s",
-                Duration = 4
+                Title = "Anti AFK Activated",
+                Content = "Simulating human-like inputs (~50-70s)",
+                Duration = 4.5
             })
             
-            VirtualUser:CaptureController()
-            VirtualUser:SetKeyDown("0x00")  -- Dummy key
-            
-            antiAFKConnection = task.spawn(function()
-                while antiAFKEnabled do
-                    task.wait(math.random(55, 65))  -- 55-65s random
-                    
-                    -- Simulate right-click + move
-                    VirtualUser:ClickButton2(Vector2.new(0, 0))
-                    task.wait(0.1)
-                    VirtualUser:ClickButton2(Vector2.new(0, 0))
-                end
-                VirtualUser:ReleaseController()
+            -- Capture controller only once when turning on
+            pcall(function()
+                VirtualUser:CaptureController()
             end)
+            
+            antiAFKThread = task.spawn(function()
+                while antiAFKEnabled do
+                    -- Random delay between actions (50–75 seconds)
+                    task.wait(math.random(50, 75) + math.random() * 5)
+                    
+                    -- === Method mix - pick 1–2 randomly each cycle ===
+                    local action = math.random(1, 5)
+                    
+                    if action == 1 or action == 5 then
+                        -- Random mouse movement + left click
+                        local randX = math.random(-400, 400)
+                        local randY = math.random(-250, 250)
+                        local pos = Vector2.new(randX, randY)
+                        VirtualUser:Button1Down(pos)
+                        task.wait(0.06 + math.random() * 0.08)
+                        VirtualUser:Button1Up(pos)
+                    end
+                    
+                    if action == 2 or action == 4 then
+                        -- Right click (common in many games)
+                        VirtualUser:ClickButton2(Vector2.new())
+                        task.wait(0.07)
+                    end
+                    
+                    if action == 3 then
+                        -- Press random movement key (WASD)
+                        local keys = {"KeyW", "KeyA", "KeyS", "KeyD"}
+                        local key = keys[math.random(1, #keys)]
+                        VirtualUser:SetKeyDown(key)
+                        task.wait(0.12 + math.random() * 0.18)
+                        VirtualUser:SetKeyUp(key)
+                    end
+                end
+            end)
+            
+            print("[AntiAFK] Started - multi-method simulation active")
         else
             Rayfield:Notify({
-                Title = "Anti AFK",
-                Content = "Deactivated",
+                Title = "Anti AFK Deactivated",
+                Content = "All simulation stopped",
                 Duration = 3
             })
-            if antiAFKConnection then
-                task.cancel(antiAFKConnection)
-                antiAFKConnection = nil
+            
+            -- Clean up properly
+            if antiAFKThread then
+                task.cancel(antiAFKThread)
+                antiAFKThread = nil
             end
-            VirtualUser:ReleaseController()
+            
+            pcall(function()
+                VirtualUser:ReleaseController()
+            end)
+            
+            print("[AntiAFK] Stopped & cleaned up")
         end
     end,
 })
 
--- 2. SPEED SLIDER (16-500)
 RealMiscTab:CreateSlider({
     Name = "Walk Speed",
     Range = {16, 500},
@@ -855,17 +933,53 @@ RealMiscTab:CreateSlider({
     Callback = function(value)
         getgenv().WalkSpeedValue = value
         
-        if speedConnection then
-            speedConnection:Disconnect()
+        -- Clean up old connection
+        cleanupSpeedConnection()
+        
+        -- If value is default (16), don't create loop — let game handle it
+        if value <= 16 then
+            applyWalkSpeed(16)  -- reset to normal
+            return
         end
         
+        -- Create new persistent connection
         speedConnection = RunService.Heartbeat:Connect(function()
-            if player.Character and player.Character:FindFirstChild("Humanoid") then
-                player.Character.Humanoid.WalkSpeed = value
+            -- Only apply if character & humanoid exist
+            if player.Character then
+                local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+                if humanoid and humanoid.WalkSpeed ~= value then
+                    humanoid.WalkSpeed = value
+                end
             end
         end)
+        
+        -- Force apply immediately
+        applyWalkSpeed(value)
     end,
 })
+
+-- Handle character respawn / reset (very important!)
+player.CharacterAdded:Connect(function(newChar)
+    -- Wait for humanoid
+    task.wait(0.5)
+    
+    local humanoid = newChar:WaitForChild("Humanoid", 5)
+    if humanoid and getgenv().WalkSpeedValue and getgenv().WalkSpeedValue > 16 then
+        humanoid.WalkSpeed = getgenv().WalkSpeedValue
+    end
+    
+    -- Re-apply the connection if it exists
+    if speedConnection then
+        -- The old connection will still work as long as character exists
+        -- But we force immediate apply
+        applyWalkSpeed(getgenv().WalkSpeedValue or 16)
+    end
+end)
+
+-- Optional: notify when speed changes
+-- You can remove this if you don't want notifications every time
+RealMiscTab:CreateSlider({...})  -- your slider code above
+
 
 -- 3. INFINITE JUMPS TOGGLE
 RealMiscTab:CreateToggle({
@@ -965,136 +1079,217 @@ RealMiscTab:CreateButton({
     end,
 })
 
--- Game Modes Dropdown with AUTO REFRESH - Add this after your tab is created
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+-- Combined Gamemode / Raid Selector + Auto-Farm Toggle
+-- Place this after your MiscTab (or whichever tab you want) is created
 
--- Helper function: scan Gamemodes folder for all mode names
-local function getGameModes()
-    local options = {"None"}
-    
-    local gamemodesFolder = ReplicatedStorage:FindFirstChild("Gamemodes")
-    if not gamemodesFolder then
-        warn("[GameModes] Folder not found in ReplicatedStorage")
-        return options
-    end
-    
-    local seen = {}
-    
-    -- Scan direct children
-    for _, child in ipairs(gamemodesFolder:GetChildren()) do
-        local name = child.Name
-        if name and name ~= "" and not seen[name] then
-            seen[name] = true
-            table.insert(options, name)
-        end
-    end
-    
-    -- Also scan descendants (subfolders, values, etc.)
-    for _, child in ipairs(gamemodesFolder:GetDescendants()) do
-        local name
-        
-        -- Prefer attribute if it exists (some games use Attributes)
-        if child:GetAttribute("Name") then
-            name = tostring(child:GetAttribute("Name"))
-        else
-            name = child.Name
-        end
-        
-        if name and name ~= "" and not seen[name] then
-            seen[name] = true
-            table.insert(options, name)
-        end
-    end
-    
-    table.sort(options)
-    return options
-end
+-- Shared variables
+local selectedGrindItem = "Boss Rush I"   -- default
+local autoGrindEnabled = false
+local FARM_DELAY = 120                    -- 2 minutes base
 
--- Dropdown
-local selectedGameMode = "None"
+-- All options in one dropdown
+local grindOptions = {
+    "Boss Rush I",
+    "Boss Rush II",
+    "Raid - Normal",
+    "Raid - Medium",
+    "Raid - Hard"
+}
 
-local GameModeDropdown = RealMiscTab:CreateDropdown({   -- ← change to your tab: MiscTab, FarmTab, etc.
-    Name = "Select Game Mode",
-    Options = getGameModes(),
-    CurrentOption = {"None"},
+-- Dropdown: choose what to auto-farm
+MiscTab:CreateDropdown({
+    Name = "Select What to Grind",
+    Options = grindOptions,
+    CurrentOption = {"Boss Rush I"},
     MultipleOptions = false,
-    Flag = "GameModeSelector",
+    Flag = "GrindSelector",
     Callback = function(option)
-        selectedGameMode = option[1]
-        
-        if selectedGameMode == "None" then
-            Rayfield:Notify({
-                Title = "Game Mode",
-                Content = "Selection cleared",
-                Duration = 3
-            })
-        else
-            Rayfield:Notify({
-                Title = "Game Mode Selected",
-                Content = "Now set to: " .. selectedGameMode,
-                Duration = 4
-            })
-            print("[GameMode] Selected:", selectedGameMode)
-            
-            -- Optional: do something with the selection
-            -- e.g. fire remote, set variable, start mode-specific script
-        end
-    end,
-})
-
--- Manual refresh button (still useful)
-RealMiscTab:CreateButton({
-    Name = "🔄 Refresh Game Modes",
-    Callback = function()
-        local newOptions = getGameModes()
-        GameModeDropdown:Refresh(newOptions, false)  -- false = keep current selection if possible
-        
+        selectedGrindItem = option[1]
         Rayfield:Notify({
-            Title = "Game Modes Updated",
-            Content = "Found " .. (#newOptions - 1) .. " modes",
+            Title = "Grind Target Updated",
+            Content = "Now set to: " .. selectedGrindItem,
             Duration = 4
         })
     end,
 })
 
--- ────────────────────────────────────────────────
--- AUTO REFRESH when folder contents change
--- ────────────────────────────────────────────────
+-- Toggle: auto-farm whatever is currently selected
+MiscTab:CreateToggle({
+    Name = "Auto Rush/Raid",
+    CurrentValue = false,
+    Flag = "AutoGrindToggle",
+    Callback = function(enabled)
+        autoGrindEnabled = enabled
+        
+        if enabled then
+            Rayfield:Notify({
+                Title = "Auto Grind Started",
+                Content = selectedGrindItem .. " every ~" .. FARM_DELAY .. "s",
+                Duration = 5
+            })
+            
+            task.spawn(function()
+                local ReplicatedStorage = game:GetService("ReplicatedStorage")
+                local BossRushRF = nil
+                local RaidRF = nil
+                
+                -- Try to cache both remotes (safe way)
+                pcall(function()
+                    BossRushRF = ReplicatedStorage
+                        :WaitForChild("Packages", 8)
+                        :WaitForChild("_Index", 8)
+                        :WaitForChild("sleitnick_knit@1.5.1", 8)
+                        :WaitForChild("knit", 8)
+                        :WaitForChild("Services", 8)
+                        :WaitForChild("BossRushService", 8)
+                        :WaitForChild("RF", 8)
+                        :WaitForChild("StartBossRush", 8)
+                end)
+                
+                pcall(function()
+                    RaidRF = ReplicatedStorage
+                        :WaitForChild("Packages", 8)
+                        :WaitForChild("_Index", 8)
+                        :WaitForChild("sleitnick_knit@1.5.1", 8)
+                        :WaitForChild("knit", 8)
+                        :WaitForChild("Services", 8)
+                        :WaitForChild("ProgressionRaidService", 8)
+                        :WaitForChild("RF", 8)
+                        :WaitForChild("StartRaid", 8)
+                end)
+                
+                while autoGrindEnabled do
+                    local success, result
+                    
+                    if selectedGrindItem:find("Boss Rush") then
+                        -- Boss Rush
+                        if not BossRushRF then
+                            Rayfield:Notify({Title = "Error", Content = "BossRush remote missing", Duration = 6})
+                            autoGrindEnabled = false
+                            break
+                        end
+                        
+                        local arg = (selectedGrindItem == "Boss Rush I") and "I" or "II"
+                        success, result = pcall(function()
+                            return BossRushRF:InvokeServer(arg)
+                        end)
+                    else
+                        -- Raid
+                        if not RaidRF then
+                            Rayfield:Notify({Title = "Error", Content = "Raid remote missing", Duration = 6})
+                            autoGrindEnabled = false
+                            break
+                        end
+                        
+                        local difficulty = selectedGrindItem:match("Raid %- (%w+)")
+                        success, result = pcall(function()
+                            return RaidRF:InvokeServer(difficulty, true)
+                        end)
+                    end
+                    
+                    if success then
+                        print("[AutoGrind] Started " .. selectedGrindItem .. " → " .. tostring(result))
+                    else
+                        warn("[AutoGrind] Failed: " .. tostring(result))
+                        Rayfield:Notify({
+                            Title = "Start Failed",
+                            Content = selectedGrindItem .. " - check cooldowns/console",
+                            Duration = 5
+                        })
+                    end
+                    
+                    task.wait(FARM_DELAY + math.random(-15, 15))
+                end
+                
+                Rayfield:Notify({
+                    Title = "Auto Grind Stopped",
+                    Content = "Loop paused.",
+                    Duration = 4
+                })
+            end)
+        else
+            Rayfield:Notify({
+                Title = "Auto Grind Stopped",
+                Content = "Loop paused.",
+                Duration = 4
+            })
+        end
+    end,
+})
 
-local function autoRefreshGameModes()
-    if not GameModeDropdown then return end
-    
-    local newOptions = getGameModes()
-    -- false = try to keep current selection if it still exists
-    GameModeDropdown:Refresh(newOptions, false)
-    
-    -- Optional: only notify if count changed significantly
-    print("[AutoRefresh] Game modes updated - now " .. (#newOptions - 1) .. " options")
-end
+-- Auto Prestige Toggle (every 4 mins) - Add this after your MainTab is created
 
--- Connect to changes in the folder
-local gamemodesFolder = ReplicatedStorage:WaitForChild("Gamemodes", 10)
+local autoPrestigeEnabled = false
+local PRESTIGE_DELAY = 240  -- 4 minutes
 
-if gamemodesFolder then
-    -- Child added / removed / renamed
-    gamemodesFolder.ChildAdded:Connect(autoRefreshGameModes)
-    gamemodesFolder.ChildRemoved:Connect(autoRefreshGameModes)
-    
-    -- Also listen for deeper changes (attributes, name changes in descendants)
-    gamemodesFolder.DescendantAdded:Connect(autoRefreshGameModes)
-    gamemodesFolder.DescendantRemoving:Connect(autoRefreshGameModes)
-    
-    -- Optional: watch for attribute changes (if modes use attributes)
-    gamemodesFolder.DescendantAdded:Connect(function(desc)
-        desc:GetPropertyChangedSignal("Name"):Connect(autoRefreshGameModes)
-        desc:GetAttributeChangedSignal("Name"):Connect(autoRefreshGameModes)
-    end)
-    
-    print("[GameModes] Auto-refresh enabled on folder changes")
-else
-    warn("[GameModes] Folder not found - auto-refresh disabled")
-end
+MainTab:CreateToggle({
+    Name = "Auto Prestige (4 min)",
+    CurrentValue = false,
+    Flag = "AutoPrestige",
+    Callback = function(enabled)
+        autoPrestigeEnabled = enabled
+        
+        if enabled then
+            Rayfield:Notify({
+                Title = "Auto Prestige Started",
+                Content = "Prestiging every 4 minutes",
+                Duration = 5
+            })
+            
+            task.spawn(function()
+                local ReplicatedStorage = game:GetService("ReplicatedStorage")
+                local PrestigeRF
+                
+                -- Safely locate the RemoteFunction
+                local pathSuccess = pcall(function()
+                    PrestigeRF = ReplicatedStorage
+                        :WaitForChild("Packages", 10)
+                        :WaitForChild("_Index", 10)
+                        :WaitForChild("sleitnick_knit@1.5.1", 10)
+                        :WaitForChild("knit", 10)
+                        :WaitForChild("Services", 10)
+                        :WaitForChild("LevelService", 10)
+                        :WaitForChild("RF", 10)
+                        :WaitForChild("Prestige", 10)
+                end)
+                
+                if not pathSuccess or not PrestigeRF then
+                    Rayfield:Notify({
+                        Title = "Error",
+                        Content = "Prestige Remote not found. Stopping.",
+                        Duration = 7
+                    })
+                    autoPrestigeEnabled = false
+                    return
+                end
+                
+                while autoPrestigeEnabled do
+                    local success, result = pcall(function()
+                        return PrestigeRF:InvokeServer()
+                    end)
+                    
+                    if success then
+                        print("[AutoPrestige] Success → " .. tostring(result))
+                    else
+                        warn("[AutoPrestige] Failed: " .. tostring(result))
+                        Rayfield:Notify({
+                            Title = "Prestige Failed",
+                            Content = "Check console / requirements.",
+                            Duration = 6
+                        })
+                    end
+                    
+                    task.wait(PRESTIGE_DELAY + math.random(-20, 20))  -- ~4min ±20s randomized
+                end
+            end)
+        else
+            Rayfield:Notify({
+                Title = "Auto Prestige Stopped",
+                Content = "Loop paused.",
+                Duration = 4
+            })
+        end
+    end,
+})
 
--- Initial scan
-task.delay(1, autoRefreshGameModes)
