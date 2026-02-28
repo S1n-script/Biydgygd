@@ -134,7 +134,8 @@ local rerollTypes = {
     "Breathing",
     "Demon Art Evolution",
     "Curse",
-    "Cursed Technique"
+    "Cursed Technique",
+    "Weapons"
 }
 
 -- Dropdown (single selection for simplicity - change to MultipleOptions = true if you want multi)
@@ -978,131 +979,6 @@ MainTab:CreateToggle({
             Rayfield:Notify({
                 Title = "Auto Prestige Stopped",
                 Content = "Loop paused.",
-                Duration = 4
-            })
-        end
-    end,
-})
-
--- Auto Raid Farm Toggle - Specifically scans workspace.Mobs for Models with Humanoid
-
-local autoRaidFarmEnabled = false
-local currentRaidTarget = nil
-
-MiscTab:CreateToggle({
-    Name = "Auto Farm Raid",
-    CurrentValue = false,
-    Flag = "AutoRaidFarmToggle",
-
-    Callback = function(enabled)
-        autoRaidFarmEnabled = enabled
-        
-        if enabled then
-            Rayfield:Notify({
-                Title = "Auto Raid Farm Started",
-                Content = "Targeting closest model in workspace.Mobs...",
-                Duration = 4.5
-            })
-            
-            task.spawn(function()
-                while autoRaidFarmEnabled do
-                    task.wait(0.2)
-
-                    local char = player.Character
-                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                    if not hrp then
-                        task.wait(0.8)
-                        continue
-                    end
-
-                    -- Get all alive raid mobs from workspace.Mobs
-                    local aliveMobs = {}
-                    
-                    local mobsFolder = workspace:FindFirstChild("Mobs")
-                    if not mobsFolder then
-                        task.wait(1.5)
-                        continue
-                    end
-
-                    -- Only look at direct children (models)
-                    for _, model in ipairs(mobsFolder:GetChildren()) do
-                        if model:IsA("Model") then
-                            local humanoid = model:FindFirstChildOfClass("Humanoid")
-                            local rootPart = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
-                            
-                            if humanoid and rootPart and humanoid.Health > 0 then
-                                local dist = (hrp.Position - rootPart.Position).Magnitude
-                                
-                                table.insert(aliveMobs, {
-                                    obj = model,
-                                    root = rootPart,
-                                    dist = dist,
-                                    mobType = model.Name or "Raid Mob",
-                                    humanoid = humanoid
-                                })
-                            end
-                        end
-                    end
-
-                    -- Sort by distance (closest first)
-                    table.sort(aliveMobs, function(a, b) return a.dist < b.dist end)
-
-                    if #aliveMobs == 0 then
-                        currentRaidTarget = nil
-                        task.wait(1.2)
-                        continue
-                    end
-
-                    -- Validate / update current target
-                    if currentRaidTarget and currentRaidTarget.obj then
-                        local stillAlive = false
-                        for _, mob in aliveMobs do
-                            if mob.obj == currentRaidTarget.obj then
-                                currentRaidTarget = mob
-                                stillAlive = true
-                                break
-                            end
-                        end
-                        if not stillAlive then
-                            currentRaidTarget = nil
-                        end
-                    end
-
-                    -- Pick closest if none or invalid
-                    if not currentRaidTarget then
-                        currentRaidTarget = aliveMobs[1]
-                        print("[AutoRaid] Targeting →", currentRaidTarget.mobType, math.floor(currentRaidTarget.dist), "studs")
-                    end
-
-                    -- Simple alive check (Humanoid.Health > 0)
-                    if currentRaidTarget.humanoid.Health <= 0 then
-                        currentRaidTarget = nil
-                        continue
-                    end
-
-                    currentRaidTarget.dist = (hrp.Position - currentRaidTarget.root.Position).Magnitude
-
-                    if currentRaidTarget.dist > 7 then
-                        -- Your teleport function (adjust offset if needed)
-                        teleportToMob(hrp, currentRaidTarget)
-                        task.wait(0.25)
-                    else
-                        task.wait(0.35)  -- already in range → small delay
-                    end
-                end
-                
-                currentRaidTarget = nil
-                Rayfield:Notify({
-                    Title = "Auto Raid Farm Stopped",
-                    Content = "Deactivated",
-                    Duration = 4
-                })
-            end)
-        else
-            currentRaidTarget = nil
-            Rayfield:Notify({
-                Title = "Auto Raid Farm Stopped",
-                Content = "Deactivated",
                 Duration = 4
             })
         end
