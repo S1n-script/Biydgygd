@@ -132,10 +132,10 @@ local rerollTypes = {
     "Reiatsu",
     "Voltstanding",
     "Breathing",
-    "Demon Art Evolution",
     "Curse",
     "Cursed Technique",
-    "Weapons"
+    "Weapons",
+    "Demon Art"   -- ← added here
 }
 
 -- Dropdown (single selection)
@@ -220,7 +220,7 @@ MiscTab:CreateToggle({
                     local success, result
                     
                     if selectedReroll == "Weapons" then
-                        -- Special case: Weapons uses different remote & fixed arg
+                        -- Weapons → special remote + fixed arg
                         if not WeaponRollRF then
                             Rayfield:Notify({Title = "Error", Content = "Weapon Roll remote missing", Duration = 5})
                             autoRerollEnabled = false
@@ -231,7 +231,7 @@ MiscTab:CreateToggle({
                             return WeaponRollRF:InvokeServer("SwordsI")
                         end)
                     else
-                        -- Normal reroll types
+                        -- All other types (including "Demon Art") → standard reroll remote
                         if not RerollRF then
                             Rayfield:Notify({Title = "Error", Content = "RerollableService remote missing", Duration = 5})
                             autoRerollEnabled = false
