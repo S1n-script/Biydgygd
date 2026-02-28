@@ -810,13 +810,14 @@ task.wait(0.6)
 local RealMiscTab = Window:CreateTab("Misc", nil)
 
 
--- Combined Gamemode / Raid Selector + Auto-Farm Toggle
--- Place this after your MiscTab (or whichever tab you want) is created
+
+-- Combined Grind Selector + Auto-Farm Toggle
+-- Now supports: Boss Rush, Raid, Time Trial, Demon Defense
 
 -- Shared variables
 local selectedGrindItem = "Boss Rush I"   -- default
 local autoGrindEnabled = false
-local FARM_DELAY = 120                    -- 2 minutes base
+local FARM_DELAY = 600                    -- 10 minutes (as you set)
 
 -- All options in one dropdown
 local grindOptions = {
@@ -824,7 +825,13 @@ local grindOptions = {
     "Boss Rush II",
     "Raid - Normal",
     "Raid - Medium",
-    "Raid - Hard"
+    "Raid - Hard",
+    "Time Trial - Easy",
+    "Time Trial - Medium",
+    "Time Trial - Hard",
+    "Demon Defense - Normal",
+    "Demon Defense - Medium",
+    "Demon Defense - Hard"
 }
 
 -- Dropdown: choose what to auto-farm
@@ -846,7 +853,7 @@ MiscTab:CreateDropdown({
 
 -- Toggle: auto-farm whatever is currently selected
 MiscTab:CreateToggle({
-    Name = "Auto Rush/Raid",
+    Name = "Auto Grind Selected Mode",
     CurrentValue = false,
     Flag = "AutoGrindToggle",
     Callback = function(enabled)
@@ -861,10 +868,14 @@ MiscTab:CreateToggle({
             
             task.spawn(function()
                 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+                local StarterGui = game:GetService("StarterGui")
+                
                 local BossRushRF = nil
                 local RaidRF = nil
+                local TrialRF = nil
+                local DefenseRF = nil
                 
-                -- Try to cache both remotes (safe way)
+                -- Cache all possible remotes safely
                 pcall(function()
                     BossRushRF = ReplicatedStorage
                         :WaitForChild("Packages", 8)
@@ -889,11 +900,35 @@ MiscTab:CreateToggle({
                         :WaitForChild("StartRaid", 8)
                 end)
                 
+                pcall(function()
+                    TrialRF = ReplicatedStorage
+                        :WaitForChild("Packages", 8)
+                        :WaitForChild("_Index", 8)
+                        :WaitForChild("sleitnick_knit@1.5.1", 8)
+                        :WaitForChild("knit", 8)
+                        :WaitForChild("Services", 8)
+                        :WaitForChild("TimeTrialService", 8)
+                        :WaitForChild("RF", 8)
+                        :WaitForChild("JoinTrial", 8)
+                end)
+                
+                pcall(function()
+                    DefenseRF = ReplicatedStorage
+                        :WaitForChild("Packages", 8)
+                        :WaitForChild("_Index", 8)
+                        :WaitForChild("sleitnick_knit@1.5.1", 8)
+                        :WaitForChild("knit", 8)
+                        :WaitForChild("Services", 8)
+                        :WaitForChild("DemonDefenseService", 8)
+                        :WaitForChild("RF", 8)
+                        :WaitForChild("StartDefense", 8)
+                end)
+                
                 while autoGrindEnabled do
                     local success, result
                     
                     if selectedGrindItem:find("Boss Rush") then
-                        -- Boss Rush
+                        -- Boss Rush (always fires)
                         if not BossRushRF then
                             Rayfield:Notify({Title = "Error", Content = "BossRush remote missing", Duration = 6})
                             autoGrindEnabled = false
@@ -904,23 +939,54 @@ MiscTab:CreateToggle({
                         success, result = pcall(function()
                             return BossRushRF:InvokeServer(arg)
                         end)
-                    else
-                        -- Raid
+                    elseif selectedGrindItem:find("Raid") then
+                        -- Raid (always fires)
                         if not RaidRF then
                             Rayfield:Notify({Title = "Error", Content = "Raid remote missing", Duration = 6})
                             autoGrindEnabled = false
                             break
                         end
                         
-                        local difficulty = selectedGrindItem:match("Raid %- (%w+)")
+                        local difficulty = selectedGrindItem:match("Raid %- (%w+)") or "Normal"
                         success, result = pcall(function()
                             return RaidRF:InvokeServer(difficulty, true)
+                        end)
+                    elseif selectedGrindItem:find("Time Trial") then
+                        -- Time Trial → only fire if TrialJoin UI is visible
+                        if not TrialRF then
+                            Rayfield:Notify({Title = "Error", Content = "TimeTrial remote missing", Duration = 6})
+                            autoGrindEnabled = false
+                            break
+                        end
+                        
+                        local trialGui = StarterGui:FindFirstChild("TrialJoin")
+                        local shouldFire = trialGui and trialGui.Enabled == true
+                        
+                        if shouldFire then
+                            local difficulty = selectedGrindItem:match("Time Trial %- (%w+)") or "Easy"
+                            success, result = pcall(function()
+                                return TrialRF:InvokeServer(difficulty)
+                            end)
+                        else
+                            print("[AutoGrind] Waiting for TrialJoin UI to appear...")
+                        end
+                    else
+                        -- Demon Defense (Normal/Medium/Hard) → always fires (no UI check requested)
+                        if not DefenseRF then
+                            Rayfield:Notify({Title = "Error", Content = "DemonDefense remote missing", Duration = 6})
+                            autoGrindEnabled = false
+                            break
+                        end
+                        
+                        local difficulty = selectedGrindItem:match("Demon Defense %- (%w+)") or "Normal"
+                        success, result = pcall(function()
+                            return DefenseRF:InvokeServer(difficulty, true)
                         end)
                     end
                     
                     if success then
                         print("[AutoGrind] Started " .. selectedGrindItem .. " → " .. tostring(result))
-                    else
+                    elseif success == false then
                         warn("[AutoGrind] Failed: " .. tostring(result))
                         Rayfield:Notify({
                             Title = "Start Failed",
@@ -948,6 +1014,128 @@ MiscTab:CreateToggle({
     end,
 })
 
+-- Auto Farm Toggle - Targets & kills mobs close to the protected part in workspace.Mobs
+
+local autoFarmEnabled = false
+local currentTarget = nil
+local PROTECTED_PART_CFRAME = CFrame.new(2132.10962, 10444.6211, -11089.9014, 0, 0, -1, -1, 0, 0, 0, 1, 0)
+local CLOSE_DISTANCE = 50  -- studs; mobs closer than this to the part are targeted
+local TELEPORT_OFFSET = CFrame.new(0, 3, -5)  -- adjust offset (behind & above mob)
+
+-- Custom isMobAlive (for models with Humanoid)
+local function isMobAlive(mobModel)
+    local humanoid = mobModel:FindFirstChildOfClass("Humanoid")
+    return humanoid and humanoid.Health > 0
+end
+
+-- Custom teleport (player hrp to mob hrp with offset)
+local function teleportToMob(playerHrp, mobData)
+    if not playerHrp or not mobData or not mobData.root then return false end
+    if not isMobAlive(mobData.obj) then return false end
+    
+    local targetCFrame = mobData.root.CFrame * TELEPORT_OFFSET
+    playerHrp.CFrame = targetCFrame
+    return true
+end
+
+MiscTab:CreateToggle({
+    Name = "Auto Farm Mobs Near Protected Part",
+    CurrentValue = false,
+    Flag = "AutoMobFarm",
+
+    Callback = function(enabled)
+        autoFarmEnabled = enabled
+
+        if enabled then
+            task.spawn(function()
+                while autoFarmEnabled do
+                    task.wait(0.2)
+
+                    local char = player.Character
+                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                    if not hrp then continue end
+
+                    -- Get alive mobs close to the protected part from workspace.Mobs
+                    local aliveMobs = {}
+                    
+                    local mobsFolder = workspace:FindFirstChild("Mobs")
+                    if not mobsFolder then
+                        task.wait(1.5)
+                        continue
+                    end
+                    
+                    for _, obj in ipairs(mobsFolder:GetChildren()) do
+                        if obj:IsA("Model") then
+                            local humanoid = obj:FindFirstChildOfClass("Humanoid")
+                            local rootPart = obj:FindFirstChild("HumanoidRootPart") or obj.PrimaryPart
+                            
+                            if humanoid and rootPart and humanoid.Health > 0 then
+                                local distToPart = (PROTECTED_PART_CFRAME.Position - rootPart.Position).Magnitude
+                                
+                                if distToPart <= CLOSE_DISTANCE then
+                                    local distToPlayer = (hrp.Position - rootPart.Position).Magnitude
+                                    table.insert(aliveMobs, {
+                                        obj = obj,
+                                        root = rootPart,
+                                        dist = distToPlayer,  -- sort by distance to player for efficiency
+                                        mobType = obj.Name or "Mob"
+                                    })
+                                end
+                            end
+                        end
+                    end
+                    
+                    -- Sort by distance to player (closest first)
+                    table.sort(aliveMobs, function(a, b) return a.dist < b.dist end)
+
+                    if #aliveMobs == 0 then
+                        currentTarget = nil
+                        task.wait(0.8)
+                        continue
+                    end
+
+                    -- Validate/update current target
+                    if currentTarget and currentTarget.obj then
+                        local stillAlive = false
+                        for _, mob in aliveMobs do
+                            if mob.obj == currentTarget.obj then
+                                currentTarget = mob
+                                stillAlive = true
+                                break
+                            end
+                        end
+                        if not stillAlive then
+                            currentTarget = nil
+                        end
+                    end
+
+                    -- Pick closest if none or invalid
+                    if not currentTarget then
+                        currentTarget = aliveMobs[1]
+                        print("Targeting →", currentTarget.mobType, math.floor(currentTarget.dist), "studs")
+                    end
+
+                    if not isMobAlive(currentTarget.obj) then
+                        currentTarget = nil
+                        continue
+                    end
+
+                    currentTarget.dist = (hrp.Position - currentTarget.root.Position).Magnitude
+
+                    if currentTarget.dist > 7 then
+                        teleportToMob(hrp, currentTarget)
+                        task.wait(0.25)
+                    else
+                        task.wait(0.35)  -- already in range
+                    end
+                end
+                currentTarget = nil
+            end)
+        else
+            currentTarget = nil
+        end
+    end,
+})
 
 -- Auto Prestige Toggle (every 4 mins) - Add this after your MainTab is created
 
@@ -1025,23 +1213,50 @@ MainTab:CreateToggle({
 })
 
 RealMiscTab:CreateButton({
-    Name = "🗑️ Destroy UI (Instant)",
+    Name = "🗑️ Destroy UI / Close Hub",
     Callback = function()
-        if Window then
-            pcall(function()
-                Window:Destroy()
-            end)
-        end
-        
-        -- Clean up any leftover ScreenGui
-        pcall(function()
-            for _, gui in player.PlayerGui:GetChildren() do
-                if gui:IsA("ScreenGui") and gui.Name:lower():find("rayfield") then
-                    gui:Destroy()
-                end
-            end
-        end)
-        
-        print(" UI destroyed")
+        -- Optional: ask for confirmation first
+        Rayfield:Notify({
+            Title = "Destroy UI?",
+            Content = "This will completely remove the hub.\nYou will need to re-execute the script to bring it back.",
+            Duration = 8,
+            Actions = {
+                Ignore = {
+                    Name = "Cancel",
+                    Callback = function()
+                        -- do nothing
+                    end
+                },
+                Confirm = {
+                    Name = "Yes, Destroy",
+                    Callback = function()
+                        -- Actually destroy the UI
+                        pcall(function()
+                            if Window then
+                                Window:Destroy()
+                            end
+                        end)
+
+                        -- Try to clean up any leftover ScreenGui
+                        pcall(function()
+                            for _, gui in ipairs(player.PlayerGui:GetChildren()) do
+                                if gui:IsA("ScreenGui") and (gui.Name:lower():find("rayfield") or gui.Name == "ThaBooHub") then
+                                    gui:Destroy()
+                                end
+                            end
+                        end)
+
+                        -- Final feedback
+                        game.StarterGui:SetCore("SendNotification", {
+                            Title = "UI Destroyed",
+                            Text = "Hub closed. Re-execute script to reopen.",
+                            Duration = 6
+                        })
+
+                        print("[Tha Boo Hub] UI has been destroyed")
+                    end
+                }
+            }
+        })
     end,
 })
