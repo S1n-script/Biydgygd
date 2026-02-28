@@ -1023,3 +1023,25 @@ MainTab:CreateToggle({
         end
     end,
 })
+
+RealMiscTab:CreateButton({
+    Name = "🗑️ Destroy UI (Instant)",
+    Callback = function()
+        if Window then
+            pcall(function()
+                Window:Destroy()
+            end)
+        end
+        
+        -- Clean up any leftover ScreenGui
+        pcall(function()
+            for _, gui in player.PlayerGui:GetChildren() do
+                if gui:IsA("ScreenGui") and gui.Name:lower():find("rayfield") then
+                    gui:Destroy()
+                end
+            end
+        end)
+        
+        print(" UI destroyed")
+    end,
+})
