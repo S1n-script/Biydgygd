@@ -132,7 +132,7 @@ local rerollTypes = {
     "Reiatsu",
     "Voltstanding",
     "Breathing",
-    "Demon Art",
+    "Demon Art Evolution",
     "Curse",
     "Cursed Technique"
 }
