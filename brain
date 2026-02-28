@@ -128,7 +128,7 @@ local rerollTypes = {
     "Chakra",
     "Jinchuriki",
     "Haki",
-    "Devil",
+    "Devil Fruit",
     "Reiatsu",
     "Voltstanding",
     "Breathing",
@@ -144,7 +144,7 @@ local RerollDropdown = MiscTab:CreateDropdown({
     Name = "Select Reroll",
     Options = rerollTypes,
     CurrentOption = {"Saiyan"},
-    MultipleOptions = true,
+    MultipleOptions = false,
     Flag = "RerollType",
     Callback = function(option)
         selectedReroll = option[1]
