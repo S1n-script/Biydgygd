@@ -138,11 +138,11 @@ local rerollTypes = {
     "Weapons"
 }
 
--- Dropdown (single selection for simplicity - change to MultipleOptions = true if you want multi)
+-- Dropdown (single selection)
 local selectedReroll = "Saiyan"  -- default
 
 local RerollDropdown = MiscTab:CreateDropdown({
-    Name = "Select Reroll",
+    Name = "Select Reroll Type",
     Options = rerollTypes,
     CurrentOption = {"Saiyan"},
     MultipleOptions = false,
@@ -152,7 +152,7 @@ local RerollDropdown = MiscTab:CreateDropdown({
         Rayfield:Notify({
             Title = "Reroll Updated",
             Content = "Now set to: " .. selectedReroll,
-            Duration = 3,
+            Duration = 3.5,
             Image = 4483362458
         })
     end,
@@ -161,8 +161,8 @@ local RerollDropdown = MiscTab:CreateDropdown({
 -- Toggle for auto-reroll loop
 local autoRerollEnabled = false
 
-local AutoRerollToggle = MiscTab:CreateToggle({
-    Name = "Auto Reroll",
+MiscTab:CreateToggle({
+    Name = "Auto Reroll (Loop)",
     CurrentValue = false,
     Flag = "AutoReroll",
     Callback = function(Value)
@@ -171,17 +171,19 @@ local AutoRerollToggle = MiscTab:CreateToggle({
         if Value then
             Rayfield:Notify({
                 Title = "Auto Reroll Started",
-                Content = "Rerolling " .. selectedReroll .. " ",
-                Duration = 1
+                Content = "Rerolling " .. selectedReroll .. " every ~4–5.5s",
+                Duration = 4
             })
             
             task.spawn(function()
                 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-                local RerollRF
+                local RerollRF = nil
+                local WeaponRollRF = nil
                 
-                -- Safe path to the RemoteFunction
-                local success, err = pcall(function()
-                    local knit = ReplicatedStorage:WaitForChild("Packages", 8)
+                -- Cache both possible remotes safely
+                pcall(function()
+                    RerollRF = ReplicatedStorage
+                        :WaitForChild("Packages", 8)
                         :WaitForChild("_Index", 8)
                         :WaitForChild("sleitnick_knit@1.5.1", 8)
                         :WaitForChild("knit", 8)
@@ -189,47 +191,84 @@ local AutoRerollToggle = MiscTab:CreateToggle({
                         :WaitForChild("RerollableService", 8)
                         :WaitForChild("RF", 8)
                         :WaitForChild("Reroll", 8)
-                    RerollRF = knit
                 end)
                 
-                if not success or not RerollRF then
+                pcall(function()
+                    WeaponRollRF = ReplicatedStorage
+                        :WaitForChild("Packages", 8)
+                        :WaitForChild("_Index", 8)
+                        :WaitForChild("sleitnick_knit@1.5.1", 8)
+                        :WaitForChild("knit", 8)
+                        :WaitForChild("Services", 8)
+                        :WaitForChild("WeaponService", 8)
+                        :WaitForChild("RF", 8)
+                        :WaitForChild("Roll", 8)
+                end)
+                
+                -- If neither remote was found → stop
+                if not RerollRF and not WeaponRollRF then
                     Rayfield:Notify({
                         Title = "Error",
-                        Content = "Could not find Reroll RemoteFunction.\nCheck game path or anti-exploit.",
-                        Duration = 1
+                        Content = "No reroll remote found (RerollableService or WeaponService).",
+                        Duration = 6
                     })
                     autoRerollEnabled = false
-                    AutoRerollToggle:Set(false)
                     return
                 end
                 
                 while autoRerollEnabled do
-                    local args = { selectedReroll }
+                    local success, result
                     
-                    local success, result = pcall(function()
-                        return RerollRF:InvokeServer(unpack(args))
-                    end)
-                    
-                    if success then
-                        print("Reroll attempted for: " .. selectedReroll .. " → Result: " .. tostring(result))
+                    if selectedReroll == "Weapons" then
+                        -- Special case: Weapons uses different remote & fixed arg
+                        if not WeaponRollRF then
+                            Rayfield:Notify({Title = "Error", Content = "Weapon Roll remote missing", Duration = 5})
+                            autoRerollEnabled = false
+                            break
+                        end
+                        
+                        success, result = pcall(function()
+                            return WeaponRollRF:InvokeServer("SwordsI")
+                        end)
                     else
-                        warn("Reroll failed: " .. tostring(result))
+                        -- Normal reroll types
+                        if not RerollRF then
+                            Rayfield:Notify({Title = "Error", Content = "RerollableService remote missing", Duration = 5})
+                            autoRerollEnabled = false
+                            break
+                        end
+                        
+                        local args = { selectedReroll }
+                        success, result = pcall(function()
+                            return RerollRF:InvokeServer(unpack(args))
+                        end)
                     end
                     
-                    -- Adjust delay based on your needs (anti-kick / rate-limit friendly)
-                    task.wait(3.5 + math.random(0.5, 2))  -- ~3.5–5.5 seconds
+                    if success then
+                        print("Reroll success for " .. selectedReroll .. " → " .. tostring(result))
+                    else
+                        warn("Reroll failed for " .. selectedReroll .. ": " .. tostring(result))
+                    end
+                    
+                    -- Delay: ~3.5–5.5 seconds (randomized)
+                    task.wait(3.5 + math.random() * 2)
                 end
+                
+                Rayfield:Notify({
+                    Title = "Auto Reroll Stopped",
+                    Content = "Loop paused.",
+                    Duration = 3
+                })
             end)
         else
             Rayfield:Notify({
                 Title = "Auto Reroll Stopped",
                 Content = "Loop paused.",
-                Duration = 1
+                Duration = 3
             })
         end
     end,
 })
-
 
 -- =====================================
 -- Machines Dropdown with AUTO-TELEPORT on Selection
