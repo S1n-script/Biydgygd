@@ -162,7 +162,7 @@ local RerollDropdown = MiscTab:CreateDropdown({
 local autoRerollEnabled = false
 
 MiscTab:CreateToggle({
-    Name = "Auto Reroll (Loop)",
+    Name = "Auto Reroll",
     CurrentValue = false,
     Flag = "AutoReroll",
     Callback = function(Value)
@@ -633,7 +633,7 @@ FarmTab:CreateButton({
 })
 
 FarmTab:CreateToggle({
-    Name = "Auto Teleport to Closest Selected Mob",
+    Name = "Auto Farm Cloest",
     CurrentValue = false,
     Flag = "AutoMobFarm",
 
@@ -817,7 +817,7 @@ local RealMiscTab = Window:CreateTab("Misc", nil)
 -- Shared variables
 local selectedGrindItem = "Boss Rush I"   -- default
 local autoGrindEnabled = false
-local FARM_DELAY = 600                    -- 10 minutes (as you set)
+local FARM_DELAY = 60                    -- 10 minutes (as you set)
 
 -- All options in one dropdown
 local grindOptions = {
@@ -1039,7 +1039,7 @@ local function teleportToMob(playerHrp, mobData)
 end
 
 MiscTab:CreateToggle({
-    Name = "Auto Farm Mobs Near Protected Part",
+    Name = "Auto Farm Selected",
     CurrentValue = false,
     Flag = "AutoMobFarm",
 
