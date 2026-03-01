@@ -63,7 +63,7 @@ local MobTypeDropdown = MainTab:CreateDropdown({
     Name = "Server Mob Types",
     Options = getServerMobTypes(),
     CurrentOption = {"None / No Types Found"},
-    MultipleOptions = false,  -- set to true if you want multi-select
+    MultipleOptions = false,  -- change to true if you want multi-select later
     Flag = "ServerMobTypes",
     Callback = function(option)
         selectedMobType = option[1]
@@ -98,14 +98,29 @@ local serverFolder = workspace
     :WaitForChild("Server", 10)
 
 if serverFolder then
+    -- Child added
     serverFolder.ChildAdded:Connect(function()
         task.delay(0.5, function()
             local newOpts = getServerMobTypes()
-            MobTypeDropdown:Refresh(newOpts, false)  -- false = keep selection if possible
+            MobTypeDropdown:Refresh(newOpts, false)  -- false = keep current selection if possible
         end)
     end)
     
-    serverFolder.ChildRemoved:Connect(function)()
-        task.delay(0.5, function)()
+    -- Child removed
+    serverFolder.ChildRemoved:Connect(function()
+        task.delay(0.5, function()
             local newOpts = getServerMobTypes()
-            MobTypeDropdown:Refresh(newOpts)
+            MobTypeDropdown:Refresh(newOpts, false)
+        end)
+    end)
+    
+    print("[Mob Dropdown] Auto-refresh enabled on workspace.Worlds.Targets.Server")
+else
+    warn("[Mob Dropdown] Could not find workspace.Worlds.Targets.Server - auto-refresh disabled")
+end
+
+-- Initial scan
+task.delay(1, function()
+    local initial = getServerMobTypes()
+    MobTypeDropdown:Refresh(initial, true)
+end)
