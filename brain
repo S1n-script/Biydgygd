@@ -14,9 +14,7 @@ local Window = Rayfield:CreateWindow({
 
 local MainTab = Window:CreateTab("Player", 7072718362) 
 
--- Dropdown: Shows Humanoid.DisplayName grouped by inferred world (from name)
-
--- Dropdown: Shows Humanoid.DisplayName (fallback to model name) from workspace.Worlds.Targets.Server
+-- Dropdown: Lists all mobs/models in workspace.Worlds.Targets.Server
 
 local function getServerMobs()
     local options = {"None / No Mobs Found"}
@@ -32,32 +30,22 @@ local function getServerMobs()
     
     local seen = {}
     
-    -- Scan direct children (assuming mobs are direct models)
+    -- Scan direct children (most common for mob models)
     for _, child in ipairs(serverFolder:GetChildren()) do
-        if child:IsA("Model") then
-            local humanoid = child:FindFirstChildOfClass("Humanoid")
-            local displayName = humanoid and humanoid.DisplayName or nil
-            
-            local nameToShow = displayName and displayName ~= "" and displayName or child.Name
-            
-            if nameToShow and not seen[nameToShow] then
-                seen[nameToShow] = true
-                table.insert(options, nameToShow)
-            end
+        local name = child.Name
+        if name and name ~= "" and not seen[name] then
+            seen[name] = true
+            table.insert(options, name)
         end
     end
     
-    -- Optional: also check descendants if some mobs are nested
+    -- Also scan deeper if mobs are nested
     for _, descendant in ipairs(serverFolder:GetDescendants()) do
         if descendant:IsA("Model") then
-            local humanoid = descendant:FindFirstChildOfClass("Humanoid")
-            local displayName = humanoid and humanoid.DisplayName or nil
-            
-            local nameToShow = displayName and displayName ~= "" and displayName or descendant.Name
-            
-            if nameToShow and not seen[nameToShow] then
-                seen[nameToShow] = true
-                table.insert(options, nameToShow)
+            local name = descendant.Name
+            if name and name ~= "" and not seen[name] then
+                seen[name] = true
+                table.insert(options, name)
             end
         end
     end
@@ -69,8 +57,8 @@ end
 -- Dropdown
 local selectedMob = "None / No Mobs Found"
 
-local MobDropdown = MiscTab:CreateDropdown({
-    Name = "Server Mobs (Humanoid DisplayName)",
+local MobDropdown = MiscTab:CreateDropdown({  -- change MiscTab to your tab name
+    Name = "Server Mobs (workspace.Worlds.Targets.Server)",
     Options = getServerMobs(),
     CurrentOption = {"None / No Mobs Found"},
     MultipleOptions = false,
@@ -82,7 +70,7 @@ local MobDropdown = MiscTab:CreateDropdown({
             Content = "Now selected: " .. selectedMob,
             Duration = 4
         })
-        print("Selected mob (display name):", selectedMob)
+        print("Selected mob:", selectedMob)
     end,
 })
 
@@ -91,7 +79,7 @@ MiscTab:CreateButton({
     Name = "🔄 Refresh Mob List",
     Callback = function()
         local newOptions = getServerMobs()
-        MobDropdown:Refresh(newOptions, true)
+        MobDropdown:Refresh(newOptions, true)  -- true = reset to first option
         
         Rayfield:Notify({
             Title = "Mob List Updated",
@@ -101,7 +89,7 @@ MiscTab:CreateButton({
     end,
 })
 
--- Auto-refresh on folder changes
+-- Auto-refresh when folder changes (added/removed mobs)
 local serverFolder = workspace
     :WaitForChild("Worlds", 10)
     :WaitForChild("Targets", 10)
@@ -110,20 +98,25 @@ local serverFolder = workspace
 if serverFolder then
     serverFolder.ChildAdded:Connect(function()
         task.delay(0.5, function()
-            MobDropdown:Refresh(getServerMobs(), false)
+            local newOpts = getServerMobs()
+            MobDropdown:Refresh(newOpts, false)  -- false = keep current selection if possible
         end)
     end)
     
     serverFolder.ChildRemoved:Connect(function()
         task.delay(0.5, function()
-            MobDropdown:Refresh(getServerMobs(), false)
+            local newOpts = getServerMobs()
+            MobDropdown:Refresh(newOpts, false)
         end)
     end)
     
-    print("[Mob Dropdown] Auto-refresh enabled")
+    print("[Mob Dropdown] Auto-refresh enabled on workspace.Worlds.Targets.Server")
+else
+    warn("[Mob Dropdown] Could not find workspace.Worlds.Targets.Server - auto-refresh disabled")
 end
 
--- Initial load
+-- Initial scan
 task.delay(1, function()
-    MobDropdown:Refresh(getServerMobs(), true)
+    local initial = getServerMobs()
+    MobDropdown:Refresh(initial, true)
 end)
