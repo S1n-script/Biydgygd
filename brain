@@ -13,7 +13,7 @@ local Window = Rayfield:CreateWindow({
 })
 
 task.wait(0.1)
-local MainTab = Window:CreateTab("Player", nil) 
+local MainTab = Window:CreateTab("Player", 7072718362) 
 
 -- Variables
 local autoClick = false
@@ -116,7 +116,7 @@ local AutoRankUpToggle = MainTab:CreateToggle({
 
 
 task.wait(0.3)
-local MiscTab = Window:CreateTab("Game", nil)   
+local MiscTab = Window:CreateTab("Game", 7072718362)   
 
 local rerollTypes = {
     "Saiyan",
@@ -397,7 +397,7 @@ MiscTab:CreateButton({
 -- Dropdown shows only mobs on your current island
 -- =====================================
 task.wait(0.5)
-local FarmTab = Window:CreateTab("Auto Farm", 4483362458)
+local FarmTab = Window:CreateTab("Auto Farm", 7072718362)
 
 -- LocalScript (Rayfield UI - Farming Tab)
 
@@ -803,7 +803,7 @@ MainTab:CreateToggle({
 })
 
 task.wait(0.7)
-local RealMiscTab = Window:CreateTab("Misc", nil)
+local RealMiscTab = Window:CreateTab("Misc", 7072718362)
 
 
 
