@@ -115,7 +115,7 @@ local AutoRankUpToggle = MainTab:CreateToggle({
 })
 
 
-task.wait(1)
+task.wait(0.3)
 local MiscTab = Window:CreateTab("Game", nil)   
 
 local rerollTypes = {
@@ -802,7 +802,7 @@ MainTab:CreateToggle({
     end,
 })
 
-task.wait(0.6)
+task.wait(0.7)
 local RealMiscTab = Window:CreateTab("Misc", nil)
 
 
@@ -1254,5 +1254,127 @@ RealMiscTab:CreateButton({
                 }
             }
         })
+    end,
+})
+
+RealMiscTab:CreateButton({
+    Name = "Rejoin Server",
+    Callback = function()
+        game:GetService("TeleportService"):Teleport(game.PlaceId, player)
+    end,
+})
+
+local fullbrightEnabled = false
+local oldLighting = {}
+
+RealMiscTab:CreateToggle({
+    Name = "Fullbright",
+    CurrentValue = false,
+    Callback = function(enabled)
+        fullbrightEnabled = enabled
+        
+        if enabled then
+            oldLighting = {
+                Brightness = Lighting.Brightness,
+                ClockTime = Lighting.ClockTime,
+                FogEnd = Lighting.FogEnd,
+                GlobalShadows = Lighting.GlobalShadows,
+            }
+            
+            Lighting.Brightness = 2
+            Lighting.ClockTime = 14
+            Lighting.FogEnd = 100000
+            Lighting.GlobalShadows = false
+        else
+            Lighting.Brightness = oldLighting.Brightness or 1
+            Lighting.ClockTime = oldLighting.ClockTime or 14
+            Lighting.FogEnd = oldLighting.FogEnd or 100000
+            Lighting.GlobalShadows = oldLighting.GlobalShadows or true
+        end
+    end,
+})
+
+-- Anti-AFK Toggle (multi-method simulation - very hard to detect)
+
+local VirtualUser = game:GetService("VirtualUser")
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+local antiAFKEnabled = false
+local antiAFKThread = nil
+
+RealMiscTab:CreateToggle({
+    Name = "Anti AFK",
+    CurrentValue = false,
+    Flag = "AntiAFK",
+    Callback = function(enabled)
+        antiAFKEnabled = enabled
+        
+        if enabled then
+            Rayfield:Notify({
+                Title = "Anti AFK Activated",
+                Content = "Simulating inputs every 50–75 seconds",
+                Duration = 4.5
+            })
+            
+            -- Capture controller once
+            pcall(function()
+                VirtualUser:CaptureController()
+            end)
+            
+            antiAFKThread = task.spawn(function()
+                while antiAFKEnabled do
+                    task.wait(math.random(50, 75))  -- 50–75s random delay
+                    
+                    -- Random action (1–4)
+                    local action = math.random(1, 4)
+                    
+                    if action == 1 then
+                        -- Random mouse movement + left click
+                        local x = math.random(-600, 600)
+                        local y = math.random(-400, 400)
+                        local pos = Vector2.new(x, y)
+                        VirtualUser:Button1Down(pos)
+                        task.wait(math.random(5, 15)/100)
+                        VirtualUser:Button1Up(pos)
+                    elseif action == 2 then
+                        -- Right click
+                        VirtualUser:ClickButton2(Vector2.new())
+                        task.wait(0.08)
+                    elseif action == 3 then
+                        -- Random WASD key press
+                        local keys = {"KeyW", "KeyA", "KeyS", "KeyD"}
+                        local key = keys[math.random(1, #keys)]
+                        VirtualUser:SetKeyDown(key)
+                        task.wait(math.random(10, 25)/100)
+                        VirtualUser:SetKeyUp(key)
+                    else
+                        -- Small mouse wiggle
+                        local pos = Vector2.new(math.random(-300, 300), math.random(-200, 200))
+                        VirtualUser:MoveMouseTo(pos)
+                        task.wait(0.1)
+                    end
+                end
+            end)
+            
+            print("[AntiAFK] Started - multi-input simulation")
+        else
+            Rayfield:Notify({
+                Title = "Anti AFK Deactivated",
+                Content = "Simulation stopped",
+                Duration = 3
+            })
+            
+            if antiAFKThread then
+                task.cancel(antiAFKThread)
+                antiAFKThread = nil
+            end
+            
+            pcall(function()
+                VirtualUser:ReleaseController()
+            end)
+            
+            print("[AntiAFK] Stopped & cleaned up")
+        end
     end,
 })
