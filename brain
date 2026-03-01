@@ -57,7 +57,7 @@ end
 -- Dropdown
 local selectedMob = "None / No Mobs Found"
 
-local MobDropdown = MiscTab:CreateDropdown({  -- change MiscTab to your tab name
+local MobDropdown = MainTab:CreateDropdown({  -- change MiscTab to your tab name
     Name = "Server Mobs (workspace.Worlds.Targets.Server)",
     Options = getServerMobs(),
     CurrentOption = {"None / No Mobs Found"},
@@ -75,7 +75,7 @@ local MobDropdown = MiscTab:CreateDropdown({  -- change MiscTab to your tab name
 })
 
 -- Manual refresh button
-MiscTab:CreateButton({
+MainTab:CreateButton({
     Name = "🔄 Refresh Mob List",
     Callback = function()
         local newOptions = getServerMobs()
