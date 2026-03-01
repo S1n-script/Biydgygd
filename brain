@@ -150,7 +150,7 @@ MainTab:CreateToggle({
                 Duration = 4.5
             })
             
-            task.spawn(function()
+            task.spawn(function)()
                 while autoAttackEnabled do
                     task.wait(0.15)  -- ~6 attacks/sec - adjust for rate-limit
                     
@@ -176,3 +176,4 @@ MainTab:CreateToggle({
                     end
                     
                     for _, obj in ipairs(serverFolder:GetDescendants()) do
+})
