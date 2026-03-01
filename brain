@@ -131,155 +131,48 @@ task.delay(1, function()
     MobDropdown:Refresh(initial, true)
 end)
 
--- Auto Send Pets on Current Target Death + Auto Switch to Next Closest
+-- Auto Attack Toggle - Fires attack remote for closest selected mob type
 
-local autoSendPetsEnabled = false
-local currentAttackedMob = nil   -- the mob we are currently attacking
-local trackedHealth = {}         -- [mob] = last known health
+local autoAttackEnabled = false
+local currentAttackTarget = nil
 
--- Helper: Find closest mob of selected type
-local function findClosestMobOfType()
-    local serverFolder = workspace
-        :FindFirstChild("Worlds")
-        :FindFirstChild("Targets")
-        :FindFirstChild("Server")
-    
-    if not serverFolder then return nil end
-    
-    local playerChar = player.Character
-    local hrp = playerChar and playerChar:FindFirstChild("HumanoidRootPart")
-    if not hrp then return nil end
-    
-    local closest = nil
-    local minDist = math.huge
-    
-    for _, obj in ipairs(serverFolder:GetDescendants()) do
-        if obj:IsA("Model") then
-            local humanoid = obj:FindFirstChildOfClass("Humanoid")
-            local root = obj:FindFirstChild("HumanoidRootPart") or obj.PrimaryPart
-            
-            if humanoid and root and humanoid.Health > 0 then
-                local mobType = obj:GetAttribute("Name") or obj.Name
-                if mobType == selectedMobType then
-                    local dist = (hrp.Position - root.Position).Magnitude
-                    if dist < minDist then
-                        minDist = dist
-                        closest = {
-                            obj = obj,
-                            root = root,
-                            dist = dist,
-                            humanoid = humanoid
-                        }
-                    end
-                end
-            end
-        end
-    end
-    
-    return closest
-end
-
-MiscTab:CreateToggle({
-    Name = "Auto Send Pets",
+MainTab:CreateToggle({
+    Name = "Auto Attack Selected Mob",
     CurrentValue = false,
-    Flag = "AutoPetsOnDeathSwitch",
+    Flag = "AutoAttackToggle",
     Callback = function(enabled)
-        autoSendPetsEnabled = enabled
+        autoAttackEnabled = enabled
         
         if enabled then
             Rayfield:Notify({
-                Title = "Auto Pets Activated",
-                Content = "Sending pets on death & switching to next closest " .. selectedMobType,
-                Duration = 5
+                Title = "Auto Attack Started",
+                Content = "Attacking closest " .. selectedMobType,
+                Duration = 4.5
             })
-            
-            trackedHealth = {}           -- reset tracking
-            currentAttackedMob = nil     -- reset target
             
             task.spawn(function()
-                while autoSendPetsEnabled do
-                    task.wait(0.35)  -- check every ~0.35s
+                while autoAttackEnabled do
+                    task.wait(0.15)  -- ~6 attacks/sec - adjust for rate-limit
                     
-                    local playerChar = player.Character
-                    local hrp = playerChar and playerChar:FindFirstChild("HumanoidRootPart")
-                    if not hrp then continue end
-                    
-                    -- If no current target → find the closest one
-                    if not currentAttackedMob or not currentAttackedMob.obj or currentAttackedMob.humanoid.Health <= 0 then
-                        local nextMob = findClosestMobOfType()
-                        if nextMob then
-                            currentAttackedMob = nextMob
-                            trackedHealth[nextMob.obj] = nextMob.humanoid.Health
-                            print("[AutoPets] New target: " .. selectedMobType .. " (" .. math.floor(nextMob.dist) .. " studs)")
-                            
-                            -- Send pets immediately to new target
-                            pcall(function()
-                                game:GetService("ReplicatedStorage")
-                                    :WaitForChild("Remotes")
-                                    :WaitForChild("PetSystem")  -- CHANGE TO YOUR PATH
-                                    :WaitForChild("SendPet")     -- or EquipBest, Attack, etc.
-                                    :FireServer()  -- add args if needed
-                            end)
-                        end
+                    local char = player.Character
+                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                    if not hrp then
+                        task.wait(0.5)
+                        continue
                     end
                     
-                    -- Check if current target died
-                    if currentAttackedMob and currentAttackedMob.humanoid then
-                        local lastHealth = trackedHealth[currentAttackedMob.obj] or currentAttackedMob.humanoid.Health
-                        local nowHealth = currentAttackedMob.humanoid.Health
-                        
-                        if lastHealth > 0 and nowHealth <= 0 then
-                            print("[AutoPets] Current target died - sending pets & switching")
-                            
-                            -- Send pets on death
-                            pcall(function()
-                                game:GetService("ReplicatedStorage")
-                                    :WaitForChild("Remotes")
-                                    :WaitForChild("PetSystem")
-                                    :WaitForChild("SendPet")
-                                    :FireServer()
-                            end)
-                            
-                            -- Immediately find and switch to next mob
-                            local nextMob = findClosestMobOfType()
-                            if nextMob then
-                                currentAttackedMob = nextMob
-                                trackedHealth[nextMob.obj] = nextMob.humanoid.Health
-                                
-                                -- Send pets to the new target right away
-                                pcall(function()
-                                    game:GetService("ReplicatedStorage")
-                                        :WaitForChild("Remotes")
-                                        :WaitForChild("PetSystem")
-                                        :WaitForChild("SendPet")
-                                        :FireServer()
-                                end)
-                            else
-                                currentAttackedMob = nil
-                            end
-                        end
-                        
-                        trackedHealth[currentAttackedMob.obj] = nowHealth
+                    -- Find closest mob of selected type
+                    local closestMob = nil
+                    local minDist = math.huge
+                    
+                    local serverFolder = workspace
+                        :FindFirstChild("Worlds")
+                        :FindFirstChild("Targets")
+                        :FindFirstChild("Server")
+                    
+                    if not serverFolder then
+                        task.wait(1)
+                        continue
                     end
-                end
-                
-                -- Cleanup when disabled
-                currentAttackedMob = nil
-                trackedHealth = {}
-                Rayfield:Notify({
-                    Title = "Auto Pets Stopped",
-                    Content = "Stopped sending pets on death",
-                    Duration = 4
-                })
-            end)
-        else
-            currentAttackedMob = nil
-            trackedHealth = {}
-            Rayfield:Notify({
-                Title = "Auto Pets Stopped",
-                Content = "Deactivated",
-                Duration = 3.5
-            })
-        end
-    end,
-})
+                    
+                    for _, obj in ipairs(serverFolder:GetDescendants()) do
