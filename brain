@@ -16,7 +16,9 @@ local MainTab = Window:CreateTab("Player", 7072718362)
 
 -- Dropdown: Shows Humanoid.DisplayName grouped by inferred world (from name)
 
-local function getServerMobsGroupedByName()
+-- Dropdown: Shows Humanoid.DisplayName (fallback to model name) from workspace.Worlds.Targets.Server
+
+local function getServerMobs()
     local options = {"None / No Mobs Found"}
     
     local serverFolder = workspace
@@ -30,52 +32,32 @@ local function getServerMobsGroupedByName()
     
     local seen = {}
     
-    -- Helper to guess world from mob name (customize patterns as needed)
-    local function guessWorld(name)
-        name = name:lower()
-        if name:find("namex") or name:find("w1") or name:find("world1") then
-            return "World 1"
-        elseif name:find("colosseum") or name:find("arena") or name:find("w2") then
-            return "World 2"
-        elseif name:find("dungeon") or name:find("dung") or name:find("w4") then
-            return "World 4"
-        elseif name:find("demon") or name:find("island3") or name:find("w3") then
-            return "Island 3"  -- placeholder for when it appears
-        else
-            return "Unknown World"
-        end
-    end
-    
-    -- Scan direct children
+    -- Scan direct children (assuming mobs are direct models)
     for _, child in ipairs(serverFolder:GetChildren()) do
         if child:IsA("Model") then
             local humanoid = child:FindFirstChildOfClass("Humanoid")
             local displayName = humanoid and humanoid.DisplayName or nil
+            
             local nameToShow = displayName and displayName ~= "" and displayName or child.Name
             
-            local world = guessWorld(nameToShow)
-            local fullLabel = "[" .. world .. "] " .. nameToShow
-            
-            if nameToShow and not seen[fullLabel] then
-                seen[fullLabel] = true
-                table.insert(options, fullLabel)
+            if nameToShow and not seen[nameToShow] then
+                seen[nameToShow] = true
+                table.insert(options, nameToShow)
             end
         end
     end
     
-    -- Optional: deeper scan
+    -- Optional: also check descendants if some mobs are nested
     for _, descendant in ipairs(serverFolder:GetDescendants()) do
-        if descendant:IsA("Model") and descendant:FindFirstChildOfClass("Humanoid") then
+        if descendant:IsA("Model") then
             local humanoid = descendant:FindFirstChildOfClass("Humanoid")
             local displayName = humanoid and humanoid.DisplayName or nil
+            
             local nameToShow = displayName and displayName ~= "" and displayName or descendant.Name
             
-            local world = guessWorld(nameToShow)
-            local fullLabel = "[" .. world .. "] " .. nameToShow
-            
-            if nameToShow and not seen[fullLabel] then
-                seen[fullLabel] = true
-                table.insert(options, fullLabel)
+            if nameToShow and not seen[nameToShow] then
+                seen[nameToShow] = true
+                table.insert(options, nameToShow)
             end
         end
     end
@@ -87,12 +69,12 @@ end
 -- Dropdown
 local selectedMob = "None / No Mobs Found"
 
-local MobDropdown = MainTab:CreateDropdown({
-    Name = "Server Mobs by Inferred World",
-    Options = getServerMobsGroupedByName(),
+local MobDropdown = MiscTab:CreateDropdown({
+    Name = "Server Mobs (Humanoid DisplayName)",
+    Options = getServerMobs(),
     CurrentOption = {"None / No Mobs Found"},
     MultipleOptions = false,
-    Flag = "ServerMobListGroupedByName",
+    Flag = "ServerMobList",
     Callback = function(option)
         selectedMob = option[1]
         Rayfield:Notify({
@@ -100,15 +82,15 @@ local MobDropdown = MainTab:CreateDropdown({
             Content = "Now selected: " .. selectedMob,
             Duration = 4
         })
-        print("Selected mob:", selectedMob)
+        print("Selected mob (display name):", selectedMob)
     end,
 })
 
 -- Manual refresh button
-MainTab:CreateButton({
-    Name = "🔄 Refresh Mob List (by World)",
+MiscTab:CreateButton({
+    Name = "🔄 Refresh Mob List",
     Callback = function()
-        local newOptions = getServerMobsGroupedByName()
+        local newOptions = getServerMobs()
         MobDropdown:Refresh(newOptions, true)
         
         Rayfield:Notify({
@@ -119,7 +101,7 @@ MainTab:CreateButton({
     end,
 })
 
--- Auto-refresh
+-- Auto-refresh on folder changes
 local serverFolder = workspace
     :WaitForChild("Worlds", 10)
     :WaitForChild("Targets", 10)
@@ -127,21 +109,21 @@ local serverFolder = workspace
 
 if serverFolder then
     serverFolder.ChildAdded:Connect(function()
-        task.delay(0.8, function()
-            MobDropdown:Refresh(getServerMobsGroupedByName(), false)
+        task.delay(0.5, function()
+            MobDropdown:Refresh(getServerMobs(), false)
         end)
     end)
     
     serverFolder.ChildRemoved:Connect(function()
-        task.delay(0.8, function()
-            MobDropdown:Refresh(getServerMobsGroupedByName(), false)
+        task.delay(0.5, function()
+            MobDropdown:Refresh(getServerMobs(), false)
         end)
     end)
     
-    print("[Mob Dropdown] Auto-refresh enabled - grouped by name pattern")
+    print("[Mob Dropdown] Auto-refresh enabled")
 end
 
 -- Initial load
-task.delay(1.2, function()
-    MobDropdown:Refresh(getServerMobsGroupedByName(), true)
+task.delay(1, function()
+    MobDropdown:Refresh(getServerMobs(), true)
 end)
