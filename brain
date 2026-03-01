@@ -158,73 +158,152 @@ local function getAliveMobs()
     return alive
 end
 
-MainTab:CreateToggle({
+-- Auto Send Pets on Current Target Death + Auto Switch to Next Closest
+
+local autoSendPetsEnabled = false
+local currentAttackedMob = nil   -- the mob we are currently attacking
+local trackedHealth = {}         -- [mob] = last known health
+
+-- Helper: Find closest mob of selected type
+local function findClosestMobOfType()
+    local serverFolder = workspace
+        :FindFirstChild("Worlds")
+        :FindFirstChild("Targets")
+        :FindFirstChild("Server")
+    
+    if not serverFolder then return nil end
+    
+    local playerChar = player.Character
+    local hrp = playerChar and playerChar:FindFirstChild("HumanoidRootPart")
+    if not hrp then return nil end
+    
+    local closest = nil
+    local minDist = math.huge
+    
+    for _, obj in ipairs(serverFolder:GetDescendants()) do
+        if obj:IsA("Model") then
+            local humanoid = obj:FindFirstChildOfClass("Humanoid")
+            local root = obj:FindFirstChild("HumanoidRootPart") or obj.PrimaryPart
+            
+            if humanoid and root and humanoid.Health > 0 then
+                local mobType = obj:GetAttribute("Name") or obj.Name
+                if mobType == selectedMobType then
+                    local dist = (hrp.Position - root.Position).Magnitude
+                    if dist < minDist then
+                        minDist = dist
+                        closest = {
+                            obj = obj,
+                            root = root,
+                            dist = dist,
+                            humanoid = humanoid
+                        }
+                    end
+                end
+            end
+        end
+    end
+    
+    return closest
+end
+
+MiscTab:CreateToggle({
     Name = "Auto Send Pets",
     CurrentValue = false,
-    Flag = "AutoPetsOnDeath",
+    Flag = "AutoPetsOnDeathSwitch",
     Callback = function(enabled)
-        autoSendPetsOnDeath = enabled
+        autoSendPetsEnabled = enabled
         
         if enabled then
             Rayfield:Notify({
-                Title = "Auto Pets on Death Activated",
-                Content = "Sending pets when a mob dies...",
-                Duration = 4.5
+                Title = "Auto Pets Activated",
+                Content = "Sending pets on death & switching to next closest " .. selectedMobType,
+                Duration = 5
             })
             
-            trackedMobs = {}  -- reset tracking
+            trackedHealth = {}           -- reset tracking
+            currentAttackedMob = nil     -- reset target
             
             task.spawn(function()
-                while autoSendPetsOnDeath do
-                    task.wait(0.4)  -- check every 0.4s - fast enough to catch deaths
+                while autoSendPetsEnabled do
+                    task.wait(0.35)  -- check every ~0.35s
                     
-                    local currentMobs = getAliveMobs()
-                    local currentKeys = {}
+                    local playerChar = player.Character
+                    local hrp = playerChar and playerChar:FindFirstChild("HumanoidRootPart")
+                    if not hrp then continue end
                     
-                    -- Track current alive mobs & their health
-                    for _, mob in ipairs(currentMobs) do
-                        local humanoid = mob:FindFirstChildOfClass("Humanoid")
-                        if humanoid then
-                            currentKeys[mob] = true
-                            local lastHealth = trackedMobs[mob]
+                    -- If no current target → find the closest one
+                    if not currentAttackedMob or not currentAttackedMob.obj or currentAttackedMob.humanoid.Health <= 0 then
+                        local nextMob = findClosestMobOfType()
+                        if nextMob then
+                            currentAttackedMob = nextMob
+                            trackedHealth[nextMob.obj] = nextMob.humanoid.Health
+                            print("[AutoPets] New target: " .. selectedMobType .. " (" .. math.floor(nextMob.dist) .. " studs)")
                             
-                            if lastHealth and lastHealth > 0 and humanoid.Health <= 0 then
-                                -- Mob just died!
-                                pcall(function()
-                                    -- Replace with YOUR actual pet send remote + args
-                                    game:GetService("ReplicatedStorage")
-                                        :WaitForChild("Remotes")
-                                        :WaitForChild("PetSystem")  -- ← CHANGE THIS PATH
-                                        :WaitForChild("SendPet")     -- ← or EquipBest, Attack, etc.
-                                        :FireServer()  -- ← add args if needed: :FireServer("Best") or whatever
-                                end)
-                                
-                                print("[AutoPets] Mob died - pets sent!")
-                            end
-                            
-                            trackedMobs[mob] = humanoid.Health
+                            -- Send pets immediately to new target
+                            pcall(function()
+                                game:GetService("ReplicatedStorage")
+                                    :WaitForChild("Remotes")
+                                    :WaitForChild("PetSystem")  -- CHANGE TO YOUR PATH
+                                    :WaitForChild("SendPet")     -- or EquipBest, Attack, etc.
+                                    :FireServer()  -- add args if needed
+                            end)
                         end
                     end
                     
-                    -- Clean up dead/disappeared mobs from tracking
-                    for mob, _ in pairs(trackedMobs) do
-                        if not currentKeys[mob] then
-                            trackedMobs[mob] = nil
+                    -- Check if current target died
+                    if currentAttackedMob and currentAttackedMob.humanoid then
+                        local lastHealth = trackedHealth[currentAttackedMob.obj] or currentAttackedMob.humanoid.Health
+                        local nowHealth = currentAttackedMob.humanoid.Health
+                        
+                        if lastHealth > 0 and nowHealth <= 0 then
+                            print("[AutoPets] Current target died - sending pets & switching")
+                            
+                            -- Send pets on death
+                            pcall(function()
+                                game:GetService("ReplicatedStorage")
+                                    :WaitForChild("Remotes")
+                                    :WaitForChild("PetSystem")
+                                    :WaitForChild("SendPet")
+                                    :FireServer()
+                            end)
+                            
+                            -- Immediately find and switch to next mob
+                            local nextMob = findClosestMobOfType()
+                            if nextMob then
+                                currentAttackedMob = nextMob
+                                trackedHealth[nextMob.obj] = nextMob.humanoid.Health
+                                
+                                -- Send pets to the new target right away
+                                pcall(function()
+                                    game:GetService("ReplicatedStorage")
+                                        :WaitForChild("Remotes")
+                                        :WaitForChild("PetSystem")
+                                        :WaitForChild("SendPet")
+                                        :FireServer()
+                                end)
+                            else
+                                currentAttackedMob = nil
+                            end
                         end
+                        
+                        trackedHealth[currentAttackedMob.obj] = nowHealth
                     end
                 end
                 
-                trackedMobs = {}  -- cleanup
+                -- Cleanup when disabled
+                currentAttackedMob = nil
+                trackedHealth = {}
                 Rayfield:Notify({
-                    Title = "Auto Pets on Death Stopped",
+                    Title = "Auto Pets Stopped",
                     Content = "Stopped sending pets on death",
-                    Duration = 3.5
+                    Duration = 4
                 })
             end)
         else
-            trackedMobs = {}
+            currentAttackedMob = nil
+            trackedHealth = {}
             Rayfield:Notify({
-                Title = "Auto Pets on Death Stopped",
+                Title = "Auto Pets Stopped",
                 Content = "Deactivated",
                 Duration = 3.5
             })
