@@ -14,8 +14,6 @@ local Window = Rayfield:CreateWindow({
 
 local MainTab = Window:CreateTab("Player", 7072718362) 
 
--- Dropdown: Lists all mobs/models in workspace.Worlds.Targets.Server
-
 -- Dropdown: Shows unique mob TYPES from workspace.Worlds.Targets.Server (via "Name" attribute)
 
 local function getServerMobTypes()
@@ -107,7 +105,7 @@ if serverFolder then
         end)
     end)
     
-    serverFolder.ChildRemoved:Connect(function()
-        task.delay(0.5, function()
+    serverFolder.ChildRemoved:Connect(function)()
+        task.delay(0.5, function)()
             local newOpts = getServerMobTypes()
-            MobTypeDropdown:Refresh(newOpts
+            MobTypeDropdown:Refresh(newOpts)
