@@ -1,21 +1,17 @@
-local success, Rayfield = pcall(function()
-    return loadstring(game:HttpGet("https://sirius.menu/rayfield", true))()
-end)
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
-if not success or not Rayfield then
-    warn("Rayfield failed to load! Error: " .. tostring(Rayfield))
-    local sg = Instance.new("ScreenGui")
-    local tx = Instance.new("TextLabel", sg)
-    tx.Size = UDim2.new(1,0,1,0)
-    tx.BackgroundColor3 = Color3.new(0,0,0)
-    tx.TextColor3 = Color3.new(1,0,0)
-    tx.Text = "Failed to load UI library.\nCheck executor / internet / script source."
-    tx.TextScaled = true
-    sg.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
-    return
-end
+local Window = Rayfield:CreateWindow({
+    Name = "HM HUB",
+    LoadingTitle = "Loading HM HUB",
+    LoadingSubtitle = "by The Hollows",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = nil,           -- nil = default folder
+        FileName = "HM Hub"
+    },
+    KeySystem = false
+})
 
-local Window = Rayfield:CreateWindow({ Name = "Your Hub", ... })
 task.wait(0.1)
 local MainTab = Window:CreateTab("Player", nil) 
 
