@@ -1,16 +1,31 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-    Name = "HM HUB",
-    LoadingTitle = "Loading HM HUB",
-    LoadingSubtitle = "by The Hollows",
-    ShowText = "HM HUB",
-    ConfigurationSaving = {
-        Enabled = true,
-        FolderName = nil,           -- nil = default folder
-        FileName = "HM Hub"
-    },
-    KeySystem = false
+   Name = "[UPD 2] Anime Destroyers",
+   Icon = 0,
+   LoadingTitle = "Hollow Moon Scripts",
+   LoadingSubtitle = "By The Hollows",
+   ShowText = "HM HUB",
+   Theme = "Default",
+
+   ToggleUIKeybind = "K",
+
+   DisableRayfieldPrompts = false,
+   DisableBuildWarnings = false,
+
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = nil,
+      FileName = "Big Hub"
+   },
+
+   Discord = {
+      Enabled = false,
+      Invite = "qXMktjStS3",  -- corrected (without full url)
+      RememberJoins = true
+   },
+
+   KeySystem = false,
 })
 
 task.wait(0.1)
@@ -1262,36 +1277,6 @@ RealMiscTab:CreateButton({
     Name = "Rejoin Server",
     Callback = function()
         game:GetService("TeleportService"):Teleport(game.PlaceId, player)
-    end,
-})
-
-local fullbrightEnabled = false
-local oldLighting = {}
-
-RealMiscTab:CreateToggle({
-    Name = "Fullbright",
-    CurrentValue = false,
-    Callback = function(enabled)
-        fullbrightEnabled = enabled
-        
-        if enabled then
-            oldLighting = {
-                Brightness = Lighting.Brightness,
-                ClockTime = Lighting.ClockTime,
-                FogEnd = Lighting.FogEnd,
-                GlobalShadows = Lighting.GlobalShadows,
-            }
-            
-            Lighting.Brightness = 2
-            Lighting.ClockTime = 14
-            Lighting.FogEnd = 100000
-            Lighting.GlobalShadows = false
-        else
-            Lighting.Brightness = oldLighting.Brightness or 1
-            Lighting.ClockTime = oldLighting.ClockTime or 14
-            Lighting.FogEnd = oldLighting.FogEnd or 100000
-            Lighting.GlobalShadows = oldLighting.GlobalShadows or true
-        end
     end,
 })
 
