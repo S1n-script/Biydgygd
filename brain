@@ -11,7 +11,7 @@ local Window = Rayfield:CreateWindow({
     },
     KeySystem = false
 })
-
+task.wait(0.2)
 local MainTab = Window:CreateTab("Player", 7072718362) 
 
 -- Dropdown: Shows Humanoid.DisplayName (fallback to model name) from workspace.Worlds.Targets.Server
