@@ -131,33 +131,6 @@ task.delay(1, function()
     MobDropdown:Refresh(initial, true)
 end)
 
--- Auto Send Pets on Mob Death (no spam - only fires when a mob dies)
-
-local autoSendPetsOnDeath = false
-local trackedMobs = {}  -- { [mobInstance] = lastHealth }
-
--- Helper to get all alive mobs in the server folder
-local function getAliveMobs()
-    local alive = {}
-    local serverFolder = workspace
-        :FindFirstChild("Worlds")
-        and workspace.Worlds:FindFirstChild("Targets")
-        and workspace.Worlds.Targets:FindFirstChild("Server")
-    
-    if not serverFolder then return alive end
-    
-    for _, obj in ipairs(serverFolder:GetDescendants()) do
-        if obj:IsA("Model") then
-            local humanoid = obj:FindFirstChildOfClass("Humanoid")
-            if humanoid and humanoid.Health > 0 then
-                table.insert(alive, obj)
-            end
-        end
-    end
-    
-    return alive
-end
-
 -- Auto Send Pets on Current Target Death + Auto Switch to Next Closest
 
 local autoSendPetsEnabled = false
