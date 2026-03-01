@@ -158,8 +158,8 @@ local function getAliveMobs()
     return alive
 end
 
-MiscTab:CreateToggle({
-    Name = "Auto Send Pets on Mob Death",
+MainTab:CreateToggle({
+    Name = "Auto Send Pets",
     CurrentValue = false,
     Flag = "AutoPetsOnDeath",
     Callback = function(enabled)
