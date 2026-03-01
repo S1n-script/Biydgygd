@@ -14,10 +14,10 @@ local Window = Rayfield:CreateWindow({
 
 local MainTab = Window:CreateTab("Player", 7072718362) 
 
--- Dropdown: Shows unique mob TYPES from workspace.Worlds.Targets.Server (via "Name" attribute)
+-- Dropdown: Shows Humanoid.DisplayName (fallback to model name) from workspace.Worlds.Targets.Server
 
-local function getServerMobTypes()
-    local options = {"None / No Types Found"}
+local function getServerMobs()
+    local options = {"None / No Mobs Found"}
     
     local serverFolder = workspace
         :FindFirstChild("Worlds")
@@ -30,24 +30,32 @@ local function getServerMobTypes()
     
     local seen = {}
     
-    -- Scan all descendants for parts/models with "Name" attribute (mob type)
-    for _, obj in ipairs(serverFolder:GetDescendants()) do
-        if obj:IsA("BasePart") or obj:IsA("Model") then
-            local mobType = obj:GetAttribute("Name")
-            if mobType and type(mobType) == "string" and #mobType > 0 and not seen[mobType] then
-                seen[mobType] = true
-                table.insert(options, mobType)
+    -- Scan direct children (most common for mob models)
+    for _, child in ipairs(serverFolder:GetChildren()) do
+        if child:IsA("Model") then
+            local humanoid = child:FindFirstChildOfClass("Humanoid")
+            local displayName = humanoid and humanoid.DisplayName or nil
+            
+            local nameToShow = (displayName and displayName ~= "") and displayName or child.Name
+            
+            if nameToShow and nameToShow ~= "" and not seen[nameToShow] then
+                seen[nameToShow] = true
+                table.insert(options, nameToShow)
             end
         end
     end
     
-    -- Fallback: if no attributes, use unique model names
-    if #options == 1 then
-        for _, child in ipairs(serverFolder:GetChildren()) do
-            local name = child.Name
-            if name and name ~= "" and not seen[name] then
-                seen[name] = true
-                table.insert(options, name)
+    -- Also scan deeper if mobs are nested
+    for _, descendant in ipairs(serverFolder:GetDescendants()) do
+        if descendant:IsA("Model") then
+            local humanoid = descendant:FindFirstChildOfClass("Humanoid")
+            local displayName = humanoid and humanoid.DisplayName or nil
+            
+            local nameToShow = (displayName and displayName ~= "") and displayName or descendant.Name
+            
+            if nameToShow and nameToShow ~= "" and not seen[nameToShow] then
+                seen[nameToShow] = true
+                table.insert(options, nameToShow)
             end
         end
     end
@@ -57,60 +65,58 @@ local function getServerMobTypes()
 end
 
 -- Dropdown
-local selectedMobType = "None / No Types Found"
+local selectedMob = "None / No Mobs Found"
 
-local MobTypeDropdown = MainTab:CreateDropdown({
-    Name = "Server Mob Types",
-    Options = getServerMobTypes(),
-    CurrentOption = {"None / No Types Found"},
-    MultipleOptions = false,  -- change to true if you want multi-select later
-    Flag = "ServerMobTypes",
+local MobDropdown = MainTab:CreateDropdown({
+    Name = "Server Mobs (workspace.Worlds.Targets.Server)",
+    Options = getServerMobs(),
+    CurrentOption = {"None / No Mobs Found"},
+    MultipleOptions = false,
+    Flag = "ServerMobList",
     Callback = function(option)
-        selectedMobType = option[1]
+        selectedMob = option[1]
         Rayfield:Notify({
-            Title = "Mob Type Selected",
-            Content = "Now selected: " .. selectedMobType,
+            Title = "Mob Selected",
+            Content = "Now selected: " .. selectedMob,
             Duration = 4
         })
-        print("Selected mob type:", selectedMobType)
+        print("Selected mob:", selectedMob)
     end,
 })
 
 -- Manual refresh button
 MainTab:CreateButton({
-    Name = "🔄 Refresh Mob Types",
+    Name = "🔄 Refresh Mob List",
     Callback = function()
-        local newOptions = getServerMobTypes()
-        MobTypeDropdown:Refresh(newOptions, true)  -- true = reset to first
+        local newOptions = getServerMobs()
+        MobDropdown:Refresh(newOptions, true)  -- true = reset to first option
         
         Rayfield:Notify({
-            Title = "Mob Types Updated",
-            Content = "Found " .. (#newOptions - 1) .. " unique types",
+            Title = "Mob List Updated",
+            Content = "Found " .. (#newOptions - 1) .. " mobs",
             Duration = 4
         })
     end,
 })
 
--- Auto-refresh when folder changes
+-- Auto-refresh when folder changes (added/removed mobs)
 local serverFolder = workspace
     :WaitForChild("Worlds", 10)
     :WaitForChild("Targets", 10)
     :WaitForChild("Server", 10)
 
 if serverFolder then
-    -- Child added
     serverFolder.ChildAdded:Connect(function()
         task.delay(0.5, function()
-            local newOpts = getServerMobTypes()
-            MobTypeDropdown:Refresh(newOpts, false)  -- false = keep current selection if possible
+            local newOpts = getServerMobs()
+            MobDropdown:Refresh(newOpts, false)  -- false = keep current selection if possible
         end)
     end)
     
-    -- Child removed
     serverFolder.ChildRemoved:Connect(function()
         task.delay(0.5, function()
-            local newOpts = getServerMobTypes()
-            MobTypeDropdown:Refresh(newOpts, false)
+            local newOpts = getServerMobs()
+            MobDropdown:Refresh(newOpts, false)
         end)
     end)
     
@@ -121,6 +127,6 @@ end
 
 -- Initial scan
 task.delay(1, function()
-    local initial = getServerMobTypes()
-    MobTypeDropdown:Refresh(initial, true)
+    local initial = getServerMobs()
+    MobDropdown:Refresh(initial, true)
 end)
