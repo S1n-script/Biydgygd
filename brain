@@ -20,7 +20,40 @@ local Tabs = {
 
 local Options = Fluent.Options
 
+local FarmTab = Tabs.Farm
 
+local AutoClick = false
+
+FarmTab:AddToggle("AutoLeftClick", {
+    Title = "Auto Left Mouse Click",
+    Description = "Rapidly clicks left mouse button while enabled",
+    Default = false,
+    Callback = function(state)
+        AutoClick = state
+        
+        if state then
+            Fluent:Notify({
+                Title = "Auto Click",
+                Content = "Left Mouse Auto-Click ENABLED",
+                Duration = 3
+            })
+        else
+            Fluent:Notify({
+                Title = "Auto Click",
+                Content = "Left Mouse Auto-Click DISABLED",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- Auto Click Logic
+game:GetService("RunService").RenderStepped:Connect(function()
+    if AutoClick then
+        local mouse = game.Players.LocalPlayer:GetMouse()
+        mouse.Button1Down:Fire()  -- Fires left click
+    end
+end)
 
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
