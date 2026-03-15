@@ -1,179 +1,36 @@
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
-local Window = Rayfield:CreateWindow({
-    Name = "HM HUB",
-    LoadingTitle = "Loading HM HUB",
-    LoadingSubtitle = "by The Hollows",
-    ConfigurationSaving = {
-        Enabled = true,
-        FolderName = nil,           -- nil = default folder
-        FileName = "HM Hub"
-    },
-    KeySystem = false
+local Window = Fluent:CreateWindow({
+    Title = "Hunty Zombie",
+    SubTitle = "By Hollow Moon Hub",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
 })
-task.wait(0.2)
-local MainTab = Window:CreateTab("Player", 7072718362) 
+local Tabs = {
+    Lobby = Window:AddTab({ Title = "Lobby", Icon = "armchair" }),
+    Farm = Window:AddTab({ Title = "Farm", Icon = "monitor" }),
+    Combat = Window:AddTab({ Title = "Combat", Icon = "sword" }),
+    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
+}
 
--- Dropdown: Shows Humanoid.DisplayName (fallback to model name) from workspace.Worlds.Targets.Server
+local Options = Fluent.Options
 
-local function getServerMobs()
-    local options = {"None / No Mobs Found"}
-    
-    local serverFolder = workspace
-        :FindFirstChild("Worlds")
-        and workspace.Worlds:FindFirstChild("Targets")
-        and workspace.Worlds.Targets:FindFirstChild("Server")
-    
-    if not serverFolder then
-        return options
-    end
-    
-    local seen = {}
-    
-    -- Scan direct children (most common for mob models)
-    for _, child in ipairs(serverFolder:GetChildren()) do
-        if child:IsA("Model") then
-            local humanoid = child:FindFirstChildOfClass("Humanoid")
-            local displayName = humanoid and humanoid.DisplayName or nil
-            
-            local nameToShow = (displayName and displayName ~= "") and displayName or child.Name
-            
-            if nameToShow and nameToShow ~= "" and not seen[nameToShow] then
-                seen[nameToShow] = true
-                table.insert(options, nameToShow)
-            end
-        end
-    end
-    
-    -- Also scan deeper if mobs are nested
-    for _, descendant in ipairs(serverFolder:GetDescendants()) do
-        if descendant:IsA("Model") then
-            local humanoid = descendant:FindFirstChildOfClass("Humanoid")
-            local displayName = humanoid and humanoid.DisplayName or nil
-            
-            local nameToShow = (displayName and displayName ~= "") and displayName or descendant.Name
-            
-            if nameToShow and nameToShow ~= "" and not seen[nameToShow] then
-                seen[nameToShow] = true
-                table.insert(options, nameToShow)
-            end
-        end
-    end
-    
-    table.sort(options)
-    return options
-end
 
--- Dropdown
-local selectedMob = "None / No Mobs Found"
 
-local MobDropdown = MainTab:CreateDropdown({
-    Name = "Server Mobs (workspace.Worlds.Targets.Server)",
-    Options = getServerMobs(),
-    CurrentOption = {"None / No Mobs Found"},
-    MultipleOptions = false,
-    Flag = "ServerMobList",
-    Callback = function(option)
-        selectedMob = option[1]
-        Rayfield:Notify({
-            Title = "Mob Selected",
-            Content = "Now selected: " .. selectedMob,
-            Duration = 4
-        })
-        print("Selected mob:", selectedMob)
-    end,
-})
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({})
+InterfaceManager:SetFolder("AnimeFinalQuest")
+SaveManager:SetFolder("AnimeFinalQuest/specific-game")
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
 
--- Manual refresh button
-MainTab:CreateButton({
-    Name = "🔄 Refresh Mob List",
-    Callback = function()
-        local newOptions = getServerMobs()
-        MobDropdown:Refresh(newOptions, true)  -- true = reset to first option
-        
-        Rayfield:Notify({
-            Title = "Mob List Updated",
-            Content = "Found " .. (#newOptions - 1) .. " mobs",
-            Duration = 4
-        })
-    end,
-})
+Window:SelectTab(1)
 
--- Auto-refresh when folder changes (added/removed mobs)
-local serverFolder = workspace
-    :WaitForChild("Worlds", 10)
-    :WaitForChild("Targets", 10)
-    :WaitForChild("Server", 10)
-
-if serverFolder then
-    serverFolder.ChildAdded:Connect(function()
-        task.delay(0.5, function()
-            local newOpts = getServerMobs()
-            MobDropdown:Refresh(newOpts, false)  -- false = keep current selection if possible
-        end)
-    end)
-    
-    serverFolder.ChildRemoved:Connect(function()
-        task.delay(0.5, function()
-            local newOpts = getServerMobs()
-            MobDropdown:Refresh(newOpts, false)
-        end)
-    end)
-    
-    print("[Mob Dropdown] Auto-refresh enabled on workspace.Worlds.Targets.Server")
-else
-    warn("[Mob Dropdown] Could not find workspace.Worlds.Targets.Server - auto-refresh disabled")
-end
-
--- Initial scan
-task.delay(1, function()
-    local initial = getServerMobs()
-    MobDropdown:Refresh(initial, true)
-end)
-
--- Auto Attack Toggle - Fires attack remote for closest selected mob type
-
-local autoAttackEnabled = false
-local currentAttackTarget = nil
-
-MainTab:CreateToggle({
-    Name = "Auto Attack Selected Mob",
-    CurrentValue = false,
-    Flag = "AutoAttackToggle",
-    Callback = function(enabled)
-        autoAttackEnabled = enabled
-        
-        if enabled then
-            Rayfield:Notify({
-                Title = "Auto Attack Started",
-                Content = "Attacking closest " .. selectedMobType,
-                Duration = 4.5
-            })
-            
-            task.spawn(function)()
-                while autoAttackEnabled do
-                    task.wait(0.15)  -- ~6 attacks/sec - adjust for rate-limit
-                    
-                    local char = player.Character
-                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                    if not hrp then
-                        task.wait(0.5)
-                        continue
-                    end
-                    
-                    -- Find closest mob of selected type
-                    local closestMob = nil
-                    local minDist = math.huge
-                    
-                    local serverFolder = workspace
-                        :FindFirstChild("Worlds")
-                        :FindFirstChild("Targets")
-                        :FindFirstChild("Server")
-                    
-                    if not serverFolder then
-                        task.wait(1)
-                        continue
-                    end
-                    
-                    for _, obj in ipairs(serverFolder:GetDescendants()) do
-})
+SaveManager:LoadAutoloadConfig()
