@@ -11,6 +11,7 @@ local Window = Fluent:CreateWindow({
     Theme = "Dark",
     MinimizeKey = Enum.KeyCode.LeftControl
 })
+
 local Tabs = {
     Lobby = Window:AddTab({ Title = "Lobby", Icon = "armchair" }),
     Farm = Window:AddTab({ Title = "Farm", Icon = "monitor" }),
@@ -19,11 +20,128 @@ local Tabs = {
 }
 
 local Options = Fluent.Options
-
 local AutoAttackEnabled = false
 local AttackDelay = 0.13
-local Connection = nil -- Store the connection for cleanup
+local AttackConnection = nil
 
+-- Debug section in Farm tab
+local DebugSection = Tabs.Farm:AddSection("Debug & Testing")
+
+-- Function to find the correct remote
+local function FindByteNetRemote()
+    -- Try multiple possible locations
+    local possiblePaths = {
+        game:GetService("ReplicatedStorage"):FindFirstChild("ByteNetReliable"),
+        game:GetService("ReplicatedStorage"):FindFirstChild("ByteNet"):FindFirstChild("Reliable") if game:GetService("ReplicatedStorage"):FindFirstChild("ByteNet") else nil,
+        game:GetService("ReplicatedStorage"):FindFirstChild("Remotes"):FindFirstChild("ByteNetReliable") if game:GetService("ReplicatedStorage"):FindFirstChild("Remotes") else nil,
+    }
+    
+    for _, remote in ipairs(possiblePaths) do
+        if remote and remote:IsA("RemoteEvent") then
+            return remote
+        end
+    end
+    
+    -- If not found in common paths, search all
+    for _, child in ipairs(game:GetService("ReplicatedStorage"):GetChildren()) do
+        if child:IsA("RemoteEvent") and child.Name:find("ByteNet") then
+            return child
+        end
+    end
+    
+    return nil
+end
+
+-- Function to fire attack with different formats
+local function FireAttack()
+    local remote = FindByteNetRemote()
+    if not remote then return false end
+    
+    -- Try different argument formats
+    local attempts = {
+        function() remote:FireServer(buffer.fromstring("\t\a\001"), { tick() }) end,
+        function() remote:FireServer("\t\a\001", { tick() }) end,
+        function() remote:FireServer({ ["data"] = buffer.fromstring("\t\a\001"), ["time"] = tick() }) end,
+        function() remote:FireServer(tick()) end,
+        function() remote:FireServer({ tick() }) end,
+    }
+    
+    for i, attempt in ipairs(attempts) do
+        local success = pcall(attempt)
+        if success then
+            return true
+        end
+    end
+    
+    return false
+end
+
+-- Test button
+DebugSection:AddButton({
+    Title = "Test Attack",
+    Description = "Fire a single test attack",
+    Callback = function()
+        local success = FireAttack()
+        if success then
+            Fluent:Notify({
+                Title = "Success",
+                Content = "Attack fired successfully!",
+                Duration = 3
+            })
+        else
+            Fluent:Notify({
+                Title = "Failed",
+                Content = "Attack failed to fire",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- Remote checker
+DebugSection:AddButton({
+    Title = "Check Remote",
+    Description = "Verify ByteNetReliable exists",
+    Callback = function()
+        local remote = FindByteNetRemote()
+        if remote then
+            Fluent:Notify({
+                Title = "Remote Found",
+                Content = "✅ ByteNetReliable exists at: " .. remote.Parent.Name .. "/" .. remote.Name,
+                Duration = 4
+            })
+            
+            -- Show remote info in console
+            print("=== Remote Info ===")
+            print("Name:", remote.Name)
+            print("Class:", remote.ClassName)
+            print("Parent:", remote.Parent.FullName)
+            print("===================")
+        else
+            Fluent:Notify({
+                Title = "Remote Not Found",
+                Content = "❌ ByteNetReliable not found in ReplicatedStorage",
+                Duration = 4
+            })
+            
+            -- List available remotes
+            print("=== Available RemoteEvents in ReplicatedStorage ===")
+            for _, child in ipairs(game:GetService("ReplicatedStorage"):GetChildren()) do
+                if child:IsA("RemoteEvent") then
+                    print("Found:", child.Name)
+                end
+            end
+        end
+    end
+})
+
+-- Status indicator
+local StatusLabel = DebugSection:AddParagraph({
+    Title = "Status",
+    Content = "Auto Attack: Disabled\nRemote: Unknown"
+})
+
+-- Auto Attack Toggle
 Tabs.Farm:AddToggle("AutoAttack", {
     Title = "Auto Attack",
     Description = "Fires the real ByteNetReliable remote",
@@ -32,17 +150,15 @@ Tabs.Farm:AddToggle("AutoAttack", {
         AutoAttackEnabled = state
         if state then
             Fluent:Notify({ Title = "Auto Attack", Content = "ENABLED", Duration = 4 })
-            
-            -- Start the loop when enabled
-            if not Connection then
-                startAttackLoop()
-            end
+            StatusLabel:SetContent("Auto Attack: Enabled\nRemote: " .. (FindByteNetRemote() and "Found" or "Not Found"))
         else
             Fluent:Notify({ Title = "Auto Attack", Content = "DISABLED", Duration = 3 })
+            StatusLabel:SetContent("Auto Attack: Disabled\nRemote: " .. (FindByteNetRemote() and "Found" or "Not Found"))
         end
     end
 })
 
+-- Attack Delay Slider
 Tabs.Farm:AddSlider("AttackDelay", {
     Title = "Attack Delay",
     Description = "Lower = faster (0.10 ~ 0.18 recommended)",
@@ -55,113 +171,48 @@ Tabs.Farm:AddSlider("AttackDelay", {
     end
 })
 
--- Function to start the attack loop
-function startAttackLoop()
-    task.spawn(function()
-        while AutoAttackEnabled do
-            -- Method 1: Try different remote paths
-            local success = false
-            
-            -- Try multiple possible remote locations
-            local remotePaths = {
-                game:GetService("ReplicatedStorage"):FindFirstChild("ByteNetReliable"),
-                game:GetService("ReplicatedStorage"):FindFirstChild("Remotes"):FindFirstChild("ByteNetReliable") if game:GetService("ReplicatedStorage"):FindFirstChild("Remotes") else nil,
-                game:GetService("ReplicatedStorage"):FindFirstChild("ByteNet"):FindFirstChild("Reliable") if game:GetService("ReplicatedStorage"):FindFirstChild("ByteNet") else nil,
-            }
-            
-            for _, remote in ipairs(remotePaths) do
-                if remote and remote:IsA("RemoteEvent") then
-                    -- Method 1: Try with proper buffer
-                    local success1, result1 = pcall(function()
-                        local args = {
-                            [1] = buffer.fromstring("\t\a\001"),
-                            [2] = { tick() }
-                        }
-                        remote:FireServer(unpack(args))
-                        return true
-                    end)
-                    
-                    if success1 then
-                        success = true
-                        break
-                    end
-                    
-                    -- Method 2: Try with different argument structure
-                    local success2, result2 = pcall(function()
-                        remote:FireServer("\t\a\001", { tick() })
-                        return true
-                    end)
-                    
-                    if success2 then
-                        success = true
-                        break
-                    end
-                    
-                    -- Method 3: Try with just tick
-                    local success3, result3 = pcall(function()
-                        remote:FireServer(tick())
-                        return true
-                    end)
-                    
-                    if success3 then
-                        success = true
-                        break
-                    end
-                end
-            end
-            
-            -- Optional: Visual feedback when attacking
-            if success then
-                -- Attack succeeded
-            end
-            
-            task.wait(AttackDelay)
-        end
-    end)
-end
-
--- Alternative: Use Heartbeat for more stable timing
-function startAttackLoopHeartbeat()
-    local heartbeat = game:GetService("RunService").Heartbeat
-    local lastAttack = 0
-    
-    Connection = heartbeat:Connect(function(dt)
-        if AutoAttackEnabled then
-            local currentTime = tick()
-            if currentTime - lastAttack >= AttackDelay then
-                -- Your attack code here
-                local remote = game:GetService("ReplicatedStorage"):FindFirstChild("ByteNetReliable")
-                if remote then
-                    pcall(function()
-                        remote:FireServer(buffer.fromstring("\t\a\001"), { tick() })
-                    end)
-                end
-                lastAttack = currentTime
-            end
-        end
-    end)
-end
-
--- Start with Heartbeat method for better performance
-startAttackLoopHeartbeat()
-
--- Cleanup when script ends
-game:GetService("CoreGui").ChildRemoved:Connect(function(child)
-    if child.Name == "YourScriptName" and Connection then
-        Connection:Disconnect()
+-- Improved attack loop using Heartbeat for better performance
+AttackConnection = game:GetService("RunService").Heartbeat:Connect(function()
+    if AutoAttackEnabled then
+        FireAttack()
+        task.wait(AttackDelay)
     end
 end)
 
+-- Alternative method if Heartbeat doesn't work well
+task.spawn(function()
+    while true do
+        if AutoAttackEnabled then
+            -- Try direct path as backup
+            local remote = game:GetService("ReplicatedStorage"):FindFirstChild("ByteNetReliable")
+            if remote then
+                pcall(function()
+                    remote:FireServer(buffer.fromstring("\t\a\001"), { tick() })
+                end)
+            end
+            task.wait(AttackDelay)
+        else
+            task.wait(0.3)
+        end
+    end
+end)
 
+-- Settings setup
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 SaveManager:IgnoreThemeSettings()
 SaveManager:SetIgnoreIndexes({})
-InterfaceManager:SetFolder("AnimeFinalQuest")
-SaveManager:SetFolder("AnimeFinalQuest/specific-game")
+InterfaceManager:SetFolder("HuntyZombie")
+SaveManager:SetFolder("HuntyZombie/specific-game")
 InterfaceManager:BuildInterfaceSection(Tabs.Settings)
 SaveManager:BuildConfigSection(Tabs.Settings)
 
 Window:SelectTab(1)
-
 SaveManager:LoadAutoloadConfig()
+
+-- Cleanup
+game:GetService("CoreGui").ChildRemoved:Connect(function(child)
+    if child.Name == "Fluent" and AttackConnection then
+        AttackConnection:Disconnect()
+    end
+end)
