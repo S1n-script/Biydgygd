@@ -20,68 +20,36 @@ local Tabs = {
 
 local Options = Fluent.Options
 
-local FarmTab = Tabs.Farm
-
 local AutoAttackEnabled = false
-local AttackConnection = nil
+local AttackDelay = 0.13
 
-FarmTab:AddToggle("AutoAttack", {
+Tabs.Farm:AddToggle("AutoAttack", {
     Title = "Auto Attack",
-    Description = "Fires ByteNetReliable directly (real attack)",
+    Description = "Fires the real ByteNetReliable remote",
     Default = false,
     Callback = function(state)
         AutoAttackEnabled = state
-
         if state then
-            Fluent:Notify({
-                Title = "Auto Attack",
-                Content = "ENABLED - Firing real remote",
-                Duration = 4
-            })
-
-            AttackConnection = game:GetService("RunService").Heartbeat:Connect(function()
-                if not AutoAttackEnabled then return end
-
-                local args = {
-                    buffer.fromstring("\t\a\001"),
-                    { tick() }  -- dynamic timestamp
-                }
-
-                pcall(function()
-                    game:GetService("ReplicatedStorage").ByteNetReliable:FireServer(unpack(args))
-                end)
-            end)
+            Fluent:Notify({ Title = "Auto Attack", Content = "ENABLED", Duration = 4 })
         else
-            if AttackConnection then
-                AttackConnection:Disconnect()
-                AttackConnection = nil
-            end
-            Fluent:Notify({
-                Title = "Auto Attack",
-                Content = "DISABLED",
-                Duration = 3
-            })
+            Fluent:Notify({ Title = "Auto Attack", Content = "DISABLED", Duration = 3 })
         end
     end
 })
 
--- Attack Speed Slider (Very Important)
-FarmTab:AddSlider("AttackDelay", {
-    Title = "Attack Speed / Delay",
-    Description = "Lower = faster (0.08 ~ 0.15 is usually safest)",
-    Default = 0.12,
+Tabs.Farm:AddSlider("AttackDelay", {
+    Title = "Attack Delay",
+    Description = "Lower = faster (0.10 ~ 0.18 recommended)",
+    Default = 0.13,
     Min = 0.05,
     Max = 0.40,
     Rounding = 3,
-    Callback = function() end
+    Callback = function(Value)
+        AttackDelay = Value
+    end
 })
 
--- Read slider value live and use better controlled loop
-local currentDelay = 0.12
-
--- Update delay when slider changes
-local sliderInstance = FarmTab:AddSlider("AttackDelay", { ... }) -- already added above
--- Better way to track slider:
+-- Main Attack Loop (simple and stable)
 task.spawn(function()
     while true do
         if AutoAttackEnabled then
@@ -92,16 +60,11 @@ task.spawn(function()
             pcall(function()
                 game:GetService("ReplicatedStorage").ByteNetReliable:FireServer(unpack(args))
             end)
-            task.wait(currentDelay)
+            task.wait(AttackDelay)
         else
             task.wait(0.3)
         end
     end
-end)
-
--- Update currentDelay from slider (Fluent way)
-FarmTab:FindFirstChild("AttackDelay"):GetPropertyChangedSignal("Value"):Connect(function()
-    currentDelay = FarmTab:FindFirstChild("AttackDelay").Value or 0.12
 end)
 
 SaveManager:SetLibrary(Fluent)
