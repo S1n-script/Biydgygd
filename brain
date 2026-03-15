@@ -1,37 +1,7 @@
--- Load with error handling
-local FluentLoaded, Fluent = pcall(function()
-    return loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-end)
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
-if not FluentLoaded then
-    warn("Failed to load Fluent UI, retrying...")
-    -- Try alternate URL
-    Fluent = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/example.lua"))()
-end
-
-if not Fluent then
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Error",
-        Text = "Failed to load Fluent UI. Check console for details.",
-        Duration = 5
-    })
-    return
-end
-
--- Load managers with error handling
-local SaveManagerLoaded, SaveManager = pcall(function()
-    return loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-end)
-
-local InterfaceManagerLoaded, InterfaceManager = pcall(function()
-    return loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
-end)
-
-if not SaveManagerLoaded or not InterfaceManagerLoaded then
-    warn("Failed to load managers, but continuing...")
-end
-
--- Create Window
 local Window = Fluent:CreateWindow({
     Title = "Hunty Zombie",
     SubTitle = "By Hollow Moon Hub",
@@ -41,8 +11,6 @@ local Window = Fluent:CreateWindow({
     Theme = "Dark",
     MinimizeKey = Enum.KeyCode.LeftControl
 })
-
--- Create Tabs
 local Tabs = {
     Lobby = Window:AddTab({ Title = "Lobby", Icon = "armchair" }),
     Farm = Window:AddTab({ Title = "Farm", Icon = "monitor" }),
@@ -51,237 +19,63 @@ local Tabs = {
 }
 
 local Options = Fluent.Options
+
 local AutoAttackEnabled = false
 local AttackDelay = 0.13
-local AttackLoopRunning = false
 
--- Debug function to find remotes
-local function FindAllRemotes()
-    local remotes = {}
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    
-    -- Search in ReplicatedStorage
-    for _, child in ipairs(ReplicatedStorage:GetChildren()) do
-        if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") or child:IsA("UnreliableRemoteEvent") then
-            table.insert(remotes, {
-                Name = child.Name,
-                Class = child.ClassName,
-                Path = child:GetFullName()
-            })
-        end
-    end
-    
-    -- Search in ReplicatedStorage subfolders
-    local function SearchFolder(folder, depth)
-        if depth > 3 then return end
-        for _, child in ipairs(folder:GetChildren()) do
-            if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") or child:IsA("UnreliableRemoteEvent") then
-                table.insert(remotes, {
-                    Name = child.Name,
-                    Class = child.ClassName,
-                    Path = child:GetFullName()
-                })
-            elseif child:IsA("Folder") or child:IsA("Model") then
-                SearchFolder(child, depth + 1)
-            end
-        end
-    end
-    
-    SearchFolder(ReplicatedStorage, 1)
-    return remotes
-end
-
--- Function to find ByteNet remote
-local function FindByteNetRemote()
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    
-    -- Try direct path first
-    local direct = ReplicatedStorage:FindFirstChild("ByteNetReliable")
-    if direct and direct:IsA("RemoteEvent") then
-        return direct
-    end
-    
-    -- Search for any remote with ByteNet in name
-    for _, remote in ipairs(FindAllRemotes()) do
-        if remote.Name:find("ByteNet") or remote.Name:find("byte") then
-            local obj = ReplicatedStorage:FindDescendant(remote.Name)
-            if obj and obj:IsA("RemoteEvent") then
-                return obj
-            end
-        end
-    end
-    
-    return nil
-end
-
--- Function to fire attack
-local function FireAttack()
-    local remote = FindByteNetRemote()
-    if not remote then return false end
-    
-    local success = false
-    
-    -- Try different argument formats
-    local argFormats = {
-        function() remote:FireServer(buffer.fromstring("\t\a\001"), { tick() }) end,
-        function() remote:FireServer("\t\a\001", { tick() }) end,
-        function() remote:FireServer({ ["data"] = "\t\a\001", ["time"] = tick() }) end,
-        function() remote:FireServer(tick()) end,
-        function() remote:FireServer({ tick() }) end,
-        function() remote:FireServer({ ["1"] = "\t\a\001", ["2"] = tick() }) end,
-    }
-    
-    for _, format in ipairs(argFormats) do
-        local s, e = pcall(format)
-        if s then
-            success = true
-            break
-        end
-    end
-    
-    return success
-end
-
--- Create UI Elements
-local FarmSection = Tabs.Farm:AddSection("Auto Farm Settings")
-
--- Auto Attack Toggle
-local AutoAttackToggle = FarmSection:AddToggle("AutoAttack", {
+Tabs.Farm:AddToggle("AutoAttack", {
     Title = "Auto Attack",
-    Description = "Automatically attack enemies",
+    Description = "Fires the real ByteNetReliable remote",
     Default = false,
     Callback = function(state)
         AutoAttackEnabled = state
-        Fluent:Notify({
-            Title = "Auto Attack",
-            Content = state and "ENABLED" or "DISABLED",
-            Duration = 3
-        })
+        if state then
+            Fluent:Notify({ Title = "Auto Attack", Content = "ENABLED", Duration = 4 })
+        else
+            Fluent:Notify({ Title = "Auto Attack", Content = "DISABLED", Duration = 3 })
+        end
     end
 })
 
--- Attack Delay Slider
-FarmSection:AddSlider("AttackDelay", {
+Tabs.Farm:AddSlider("AttackDelay", {
     Title = "Attack Delay",
-    Description = "Delay between attacks (seconds)",
+    Description = "Lower = faster (0.10 ~ 0.18 recommended)",
     Default = 0.13,
     Min = 0.05,
     Max = 0.40,
-    Rounding = 2,
+    Rounding = 3,
     Callback = function(Value)
         AttackDelay = Value
     end
 })
 
--- Debug Section
-local DebugSection = Tabs.Farm:AddSection("Debug Tools")
-
--- Test Attack Button
-DebugSection:AddButton({
-    Title = "Test Attack",
-    Description = "Fire a single test attack",
-    Callback = function()
-        local success = FireAttack()
-        if success then
-            Fluent:Notify({
-                Title = "Success",
-                Content = "✅ Attack fired!",
-                Duration = 2
-            })
-        else
-            Fluent:Notify({
-                Title = "Failed",
-                Content = "❌ Attack failed",
-                Duration = 2
-            })
-        end
-    end
-})
-
--- Scan Remotes Button
-DebugSection:AddButton({
-    Title = "Scan Remotes",
-    Description = "Find all available remotes",
-    Callback = function()
-        local remotes = FindAllRemotes()
-        
-        -- Clear console for better visibility
-        print("\\n" .. string.rep("=", 50))
-        print("REMOTE SCAN RESULTS")
-        print(string.rep("=", 50))
-        
-        if #remotes == 0 then
-            print("No remotes found!")
-        else
-            for i, remote in ipairs(remotes) do
-                print(string.format("%d. %s (%s)", i, remote.Name, remote.Class))
-                print("   Path: " .. remote.Path)
-            end
-            
-            -- Also show in notification
-            Fluent:Notify({
-                Title = "Scan Complete",
-                Content = string.format("Found %d remotes. Check console (F9)", #remotes),
-                Duration = 4
-            })
-        end
-        
-        print(string.rep("=", 50))
-    end
-})
-
--- Auto Attack Loop
+-- Main Attack Loop (simple and stable)
 task.spawn(function()
     while true do
         if AutoAttackEnabled then
-            -- Try multiple methods
-            local remote = FindByteNetRemote()
-            
-            if remote then
-                -- Method 1: Original format
-                pcall(function()
-                    remote:FireServer(buffer.fromstring("\t\a\001"), { tick() })
-                end)
-                
-                -- Small delay between attempts
-                task.wait(0.01)
-                
-                -- Method 2: Alternative format
-                pcall(function()
-                    remote:FireServer("\t\a\001", tick())
-                end)
-            end
-            
+            local args = {
+                buffer.fromstring("\t\a\001"),
+                { tick() }
+            }
+            pcall(function()
+                game:GetService("ReplicatedStorage").ByteNetReliable:FireServer(unpack(args))
+            end)
             task.wait(AttackDelay)
         else
-            task.wait(0.1)
+            task.wait(0.3)
         end
     end
 end)
 
--- Setup Save Manager (with error handling)
-if SaveManager and InterfaceManager then
-    pcall(function()
-        SaveManager:SetLibrary(Fluent)
-        InterfaceManager:SetLibrary(Fluent)
-        SaveManager:IgnoreThemeSettings()
-        SaveManager:SetIgnoreIndexes({})
-        InterfaceManager:SetFolder("HuntyZombie")
-        SaveManager:SetFolder("HuntyZombie")
-        InterfaceManager:BuildInterfaceSection(Tabs.Settings)
-        SaveManager:BuildConfigSection(Tabs.Settings)
-        SaveManager:LoadAutoloadConfig()
-    end)
-end
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({})
+InterfaceManager:SetFolder("AnimeFinalQuest")
+SaveManager:SetFolder("AnimeFinalQuest/specific-game")
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
 
--- Select first tab
 Window:SelectTab(1)
 
--- Welcome notification
-Fluent:Notify({
-    Title = "Hunty Zombie",
-    Content = "Script loaded! Use 'Scan Remotes' to find attack remote.",
-    Duration = 5
-})
-
-print("✅ Hunty Zombie script loaded successfully!")
+SaveManager:LoadAutoloadConfig()
