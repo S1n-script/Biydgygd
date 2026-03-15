@@ -22,6 +22,7 @@ local Options = Fluent.Options
 
 local AutoAttackEnabled = false
 local AttackDelay = 0.13
+local Connection = nil -- Store the connection for cleanup
 
 Tabs.Farm:AddToggle("AutoAttack", {
     Title = "Auto Attack",
@@ -31,6 +32,11 @@ Tabs.Farm:AddToggle("AutoAttack", {
         AutoAttackEnabled = state
         if state then
             Fluent:Notify({ Title = "Auto Attack", Content = "ENABLED", Duration = 4 })
+            
+            -- Start the loop when enabled
+            if not Connection then
+                startAttackLoop()
+            end
         else
             Fluent:Notify({ Title = "Auto Attack", Content = "DISABLED", Duration = 3 })
         end
@@ -49,23 +55,103 @@ Tabs.Farm:AddSlider("AttackDelay", {
     end
 })
 
--- Main Attack Loop (simple and stable)
-task.spawn(function()
-    while true do
-        if AutoAttackEnabled then
-            local args = {
-                buffer.fromstring("\t\a\001"),
-                { tick() }
+-- Function to start the attack loop
+function startAttackLoop()
+    task.spawn(function()
+        while AutoAttackEnabled do
+            -- Method 1: Try different remote paths
+            local success = false
+            
+            -- Try multiple possible remote locations
+            local remotePaths = {
+                game:GetService("ReplicatedStorage"):FindFirstChild("ByteNetReliable"),
+                game:GetService("ReplicatedStorage"):FindFirstChild("Remotes"):FindFirstChild("ByteNetReliable") if game:GetService("ReplicatedStorage"):FindFirstChild("Remotes") else nil,
+                game:GetService("ReplicatedStorage"):FindFirstChild("ByteNet"):FindFirstChild("Reliable") if game:GetService("ReplicatedStorage"):FindFirstChild("ByteNet") else nil,
             }
-            pcall(function()
-                game:GetService("ReplicatedStorage").ByteNetReliable:FireServer(unpack(args))
-            end)
+            
+            for _, remote in ipairs(remotePaths) do
+                if remote and remote:IsA("RemoteEvent") then
+                    -- Method 1: Try with proper buffer
+                    local success1, result1 = pcall(function()
+                        local args = {
+                            [1] = buffer.fromstring("\t\a\001"),
+                            [2] = { tick() }
+                        }
+                        remote:FireServer(unpack(args))
+                        return true
+                    end)
+                    
+                    if success1 then
+                        success = true
+                        break
+                    end
+                    
+                    -- Method 2: Try with different argument structure
+                    local success2, result2 = pcall(function()
+                        remote:FireServer("\t\a\001", { tick() })
+                        return true
+                    end)
+                    
+                    if success2 then
+                        success = true
+                        break
+                    end
+                    
+                    -- Method 3: Try with just tick
+                    local success3, result3 = pcall(function()
+                        remote:FireServer(tick())
+                        return true
+                    end)
+                    
+                    if success3 then
+                        success = true
+                        break
+                    end
+                end
+            end
+            
+            -- Optional: Visual feedback when attacking
+            if success then
+                -- Attack succeeded
+            end
+            
             task.wait(AttackDelay)
-        else
-            task.wait(0.3)
         end
+    end)
+end
+
+-- Alternative: Use Heartbeat for more stable timing
+function startAttackLoopHeartbeat()
+    local heartbeat = game:GetService("RunService").Heartbeat
+    local lastAttack = 0
+    
+    Connection = heartbeat:Connect(function(dt)
+        if AutoAttackEnabled then
+            local currentTime = tick()
+            if currentTime - lastAttack >= AttackDelay then
+                -- Your attack code here
+                local remote = game:GetService("ReplicatedStorage"):FindFirstChild("ByteNetReliable")
+                if remote then
+                    pcall(function()
+                        remote:FireServer(buffer.fromstring("\t\a\001"), { tick() })
+                    end)
+                end
+                lastAttack = currentTime
+            end
+        end
+    end)
+end
+
+-- Start with Heartbeat method for better performance
+startAttackLoopHeartbeat()
+
+-- Cleanup when script ends
+game:GetService("CoreGui").ChildRemoved:Connect(function(child)
+    if child.Name == "YourScriptName" and Connection then
+        Connection:Disconnect()
     end
 end)
+
 
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
